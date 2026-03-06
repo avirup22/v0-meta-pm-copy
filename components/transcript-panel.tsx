@@ -14,6 +14,7 @@ import {
   ChevronDown,
   AlertCircle,
   Send,
+  FileOutput,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -184,6 +185,9 @@ function extractDateFromFilename(name: string): string {
   return new Date().toISOString().split("T")[0]
 }
 
+const WEBHOOK_TRANSCRIPT = "https://indegene-sbx.app.n8n.cloud/webhook-test/meta-pm"
+const WEBHOOK_GET_MOM    = "https://indegene-sbx.app.n8n.cloud/webhook-test/get-mom"
+
 export function TranscriptPanel({ projectName = "Unknown Project", userName = "User" }: TranscriptPanelProps) {
   const { token } = useAuth()
   const [mode, setMode] = useState<Mode>("idle")
@@ -206,10 +210,14 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
   const transcriptRef = useRef<HTMLDivElement>(null)
 
   // Webhook state
-  const [webhookUrl, setWebhookUrl] = useState("")
   const [webhookPayload, setWebhookPayload] = useState<object | null>(null)
   const [webhookLog, setWebhookLog] = useState<ApiLog | null>(null)
   const [webhookSending, setWebhookSending] = useState(false)
+
+  // MOM state
+  const [momLog, setMomLog] = useState<ApiLog | null>(null)
+  const [momSending, setMomSending] = useState(false)
+  const [fileName, setFileName] = useState<string>("")
 
   // Fetch recordings when entering meeting-search mode
   useEffect(() => {
@@ -301,12 +309,13 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
       }
 
       // Build webhook payload
-      const fileName = (pendingFile.originalName ?? pendingFile.name).replace(/\.[^/.]+$/, "")
+      const resolvedFileName = (pendingFile.originalName ?? pendingFile.name).replace(/\.[^/.]+$/, "")
+      setFileName(resolvedFileName)
       const payload = {
         user_name: userName,
         project_name: projectName,
-        file_name: fileName,
-        meeting_date: extractDateFromFilename(fileName),
+        file_name: resolvedFileName,
+        meeting_date: extractDateFromFilename(resolvedFileName),
         transcript: plainText,
       }
 
@@ -323,12 +332,12 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
   }
 
   async function handleSendWebhook() {
-    if (!webhookUrl.trim() || !webhookPayload) return
+    if (!webhookPayload) return
     setWebhookSending(true)
     setWebhookLog(null)
 
     try {
-      const res = await fetch(webhookUrl.trim(), {
+      const res = await fetch(WEBHOOK_TRANSCRIPT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(webhookPayload),
@@ -336,21 +345,53 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
       const resText = await res.text()
       setWebhookLog({
         step: 3,
-        label: "n8n Webhook",
-        url: webhookUrl.trim(),
+        label: "Send Transcript",
+        url: WEBHOOK_TRANSCRIPT,
         status: res.status,
         responsePreview: resText,
       })
     } catch (err: unknown) {
       setWebhookLog({
         step: 3,
-        label: "n8n Webhook",
-        url: webhookUrl.trim(),
+        label: "Send Transcript",
+        url: WEBHOOK_TRANSCRIPT,
         status: 0,
         responsePreview: err instanceof Error ? err.message : "Network error",
       })
     } finally {
       setWebhookSending(false)
+    }
+  }
+
+  async function handleGetMOM() {
+    if (!fileName) return
+    setMomSending(true)
+    setMomLog(null)
+
+    try {
+      const res = await fetch(WEBHOOK_GET_MOM, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_name: fileName }),
+      })
+      const resText = await res.text()
+      setMomLog({
+        step: 4,
+        label: "Generate MOM",
+        url: WEBHOOK_GET_MOM,
+        status: res.status,
+        responsePreview: resText,
+      })
+    } catch (err: unknown) {
+      setMomLog({
+        step: 4,
+        label: "Generate MOM",
+        url: WEBHOOK_GET_MOM,
+        status: 0,
+        responsePreview: err instanceof Error ? err.message : "Network error",
+      })
+    } finally {
+      setMomSending(false)
     }
   }
 
@@ -366,6 +407,8 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
     setApiLogs([])
     setWebhookPayload(null)
     setWebhookLog(null)
+    setMomLog(null)
+    setFileName("")
     setMode("idle")
   }
 
@@ -638,11 +681,11 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
             </div>
           )}
 
-          {/* Webhook section */}
+          {/* Actions section */}
           {webhookPayload && (
             <div className="flex flex-col gap-3 pt-2 border-t border-border">
               <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase font-sans">
-                Send to n8n
+                Actions
               </p>
 
               {/* Payload preview */}
@@ -655,29 +698,36 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
                 </pre>
               </details>
 
-              {/* Webhook URL input */}
+              {/* Two action buttons */}
               <div className="flex flex-col gap-2">
-                <Input
-                  className="h-9 text-sm font-sans"
-                  placeholder="https://your-n8n.cloud/webhook/..."
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                />
                 <Button
                   onClick={handleSendWebhook}
-                  disabled={!webhookUrl.trim() || webhookSending}
-                  className="w-full rounded-lg font-sans font-medium flex items-center gap-2"
+                  disabled={webhookSending}
+                  className="w-full rounded-lg font-sans font-medium flex items-center justify-center gap-2"
                   style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
                 >
                   {webhookSending ? (
                     <><Loader2 size={15} className="animate-spin" /> Sending...</>
                   ) : (
-                    <><Send size={15} /> Send to Webhook</>
+                    <><Send size={15} /> Send Transcript</>
+                  )}
+                </Button>
+
+                <Button
+                  onClick={handleGetMOM}
+                  disabled={momSending}
+                  variant="outline"
+                  className="w-full rounded-lg font-sans font-medium flex items-center justify-center gap-2 border-border text-foreground"
+                >
+                  {momSending ? (
+                    <><Loader2 size={15} className="animate-spin" /> Generating MOM...</>
+                  ) : (
+                    <><FileOutput size={15} /> Generate MOM</>
                   )}
                 </Button>
               </div>
 
-              {/* Webhook response */}
+              {/* Send Transcript response */}
               {webhookLog && (
                 <div className="rounded-lg border border-border overflow-hidden text-xs font-mono">
                   <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-secondary">
@@ -688,6 +738,21 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
                   </div>
                   <pre className="px-3 py-3 overflow-x-auto whitespace-pre-wrap text-muted-foreground leading-relaxed max-h-32 overflow-y-auto">
                     {webhookLog.responsePreview}
+                  </pre>
+                </div>
+              )}
+
+              {/* MOM response */}
+              {momLog && (
+                <div className="rounded-lg border border-border overflow-hidden text-xs font-mono">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-secondary">
+                    <span className={`font-bold px-1.5 py-0.5 rounded text-white ${momLog.status >= 200 && momLog.status < 300 ? "bg-green-600" : "bg-red-500"}`}>
+                      {momLog.status || "ERR"}
+                    </span>
+                    <span className="font-sans font-semibold text-foreground">{momLog.label}</span>
+                  </div>
+                  <pre className="px-3 py-3 overflow-x-auto whitespace-pre-wrap text-muted-foreground leading-relaxed max-h-48 overflow-y-auto">
+                    {momLog.responsePreview}
                   </pre>
                 </div>
               )}
