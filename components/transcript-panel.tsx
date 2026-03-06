@@ -129,106 +129,36 @@ export function TranscriptPanel() {
     setTranscriptLines([])
 
     const { driveItemId, driveId, siteUrl } = pendingFile
-    const logs: ApiLog[] = []
 
     try {
-      // ── CALL 1: List transcripts ──────────────────────────────────────────
-      const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${driveItemId}/media/transcripts`
-      console.log("[v0] CALL 1 →", transcriptsUrl)
-
-      const call1Res = await fetch(transcriptsUrl, {
-        credentials: "include",        // use browser session cookie — no token needed
-        headers: { Accept: "application/json" },
+      // Proxy through our server route so the Bearer token is sent server-side
+      // (browser cross-origin fetch with credentials:include is blocked by CORS wildcard)
+      const res = await fetch("/api/extract-transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteUrl, driveId, itemId: driveItemId, token }),
       })
-      const call1Body = await call1Res.text()
 
-      logs.push({
-        step: 1,
-        label: "List transcripts",
-        url: transcriptsUrl,
-        status: call1Res.status,
-        responsePreview: call1Body,
-      })
-      setApiLogs([...logs])
-
-      if (!call1Res.ok) {
-        throw new Error(`Transcript list failed (HTTP ${call1Res.status}): ${call1Body.slice(0, 200)}`)
+      const data = await res.json() as {
+        lines?: TranscriptLine[]
+        logs?: ApiLog[]
+        error?: string
       }
 
-      const transcriptsData = JSON.parse(call1Body) as { value: { id: string; isDefault?: boolean; temporaryDownloadUrl?: string }[] }
-      const transcripts = transcriptsData.value ?? []
+      if (data.logs) setApiLogs(data.logs)
 
-      if (transcripts.length === 0) {
-        throw new Error("No transcripts found for this recording.")
+      if (!res.ok || data.error) {
+        throw new Error(data.error ?? `Server error HTTP ${res.status}`)
       }
 
-      // Pick the default transcript, or the first one
-      const transcript = transcripts.find((t) => t.isDefault) ?? transcripts[0]
-
-      // ── CALL 2: Stream transcript content ─────────────────────────────────
-      // If a pre-signed temporaryDownloadUrl is available, use it directly.
-      // Otherwise construct the streamContent URL.
-      let vttText = ""
-
-      if (transcript.temporaryDownloadUrl) {
-        const call2Res = await fetch(transcript.temporaryDownloadUrl)
-        vttText = await call2Res.text()
-
-        logs.push({
-          step: 2,
-          label: "Download VTT (temporaryDownloadUrl)",
-          url: transcript.temporaryDownloadUrl.slice(0, 120) + "...",
-          status: call2Res.status,
-          responsePreview: vttText.slice(0, 500),
-        })
-      } else {
-        const streamUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${driveItemId}/media/transcripts/${transcript.id}/streamContent?is=1&applymediaedits=false`
-
-        const call2Res = await fetch(streamUrl, {
-          credentials: "include",
-          headers: { Accept: "*/*" },
-        })
-        vttText = await call2Res.text()
-
-        logs.push({
-          step: 2,
-          label: "Stream transcript content",
-          url: streamUrl,
-          status: call2Res.status,
-          responsePreview: vttText.slice(0, 500),
-        })
-      }
-
-      setApiLogs([...logs])
-
-      // ── Parse VTT ─────────────────────────────────────────────────────────
-      const lines = parseVTT(vttText)
-      setTranscriptLines(lines)
+      setTranscriptLines(data.lines ?? [])
       setMode("done")
 
     } catch (err: unknown) {
-      setApiLogs([...logs])
       const msg = err instanceof Error ? err.message : "Failed to extract transcript."
       setExtractError(msg)
       setMode("error")
     }
-  }
-
-  function parseVTT(vtt: string): TranscriptLine[] {
-    const lines: TranscriptLine[] = []
-    const blocks = vtt.split(/\n\n+/)
-    for (const block of blocks) {
-      const rows = block.trim().split("\n")
-      const tsIdx = rows.findIndex((l) => l.includes(" --> "))
-      if (tsIdx === -1) continue
-      const timestamp = rows[tsIdx].split(" --> ")[0].trim().replace(/\.\d{3}$/, "")
-      const rawText = rows.slice(tsIdx + 1).join(" ").trim()
-      const speakerMatch = rawText.match(/^<v ([^>]+)>/)
-      const speaker = speakerMatch ? speakerMatch[1] : ""
-      const text = rawText.replace(/<v [^>]+>/g, "").replace(/<\/v>/g, "").replace(/<[^>]+>/g, "").trim()
-      if (text) lines.push({ timestamp, speaker, text })
-    }
-    return lines
   }
 
   function handleCancel() {
