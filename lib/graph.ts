@@ -26,7 +26,9 @@ export async function getDriveItemByPath(
   token: string,
   path: string
 ): Promise<DriveItem> {
-  const url = `${GRAPH_BASE}/me/drive/root:/${encodeURIComponent(path)}`
+  // Encode each path segment individually so "/" separators are preserved
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/")
+  const url = `${GRAPH_BASE}/me/drive/root:/${encodedPath}`
   console.log("[v0] getDriveItemByPath →", url)
 
   const res = await fetch(url, {
