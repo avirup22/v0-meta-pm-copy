@@ -52,28 +52,9 @@ interface TranscriptPanelProps {
   userName?: string
 }
 
-// Parse a VTT file into plain readable text
-function parseVTTToText(vtt: string): string {
-  const lines: string[] = []
-  const blocks = vtt.split(/\n\n+/)
-  for (const block of blocks) {
-    const rows = block.trim().split("\n")
-    const tsIdx = rows.findIndex((l) => l.includes(" --> "))
-    if (tsIdx === -1) continue
-    const rawText = rows.slice(tsIdx + 1).join(" ").trim()
-    const speakerMatch = rawText.match(/^<v ([^>]+)>/)
-    const speaker = speakerMatch ? speakerMatch[1] : ""
-    const text = rawText.replace(/<v [^>]+>/g, "").replace(/<\/v>/g, "").replace(/<[^>]+>/g, "").trim()
-    if (text) {
-      lines.push(speaker ? `${speaker}: ${text}` : text)
-    }
-  }
-  return lines.join("\n")
-}
-
-// Parse a VTT file into structured lines for display
-function parseVTTToLines(vtt: string): TranscriptLine[] {
-  const lines: TranscriptLine[] = []
+// Extract all raw cues from a VTT string
+function extractCues(vtt: string): { timestamp: string; speaker: string; text: string }[] {
+  const cues: { timestamp: string; speaker: string; text: string }[] = []
   const blocks = vtt.split(/\n\n+/)
   for (const block of blocks) {
     const rows = block.trim().split("\n")
@@ -81,12 +62,50 @@ function parseVTTToLines(vtt: string): TranscriptLine[] {
     if (tsIdx === -1) continue
     const timestamp = rows[tsIdx].split(" --> ")[0].trim().replace(/\.\d{3}$/, "")
     const rawText = rows.slice(tsIdx + 1).join(" ").trim()
+    if (!rawText) continue
     const speakerMatch = rawText.match(/^<v ([^>]+)>/)
-    const speaker = speakerMatch ? speakerMatch[1] : ""
-    const text = rawText.replace(/<v [^>]+>/g, "").replace(/<\/v>/g, "").replace(/<[^>]+>/g, "").trim()
-    if (text) lines.push({ timestamp, speaker, text })
+    const speaker = speakerMatch ? speakerMatch[1].trim() : ""
+    const text = rawText
+      .replace(/<v [^>]+>/g, "")
+      .replace(/<\/v>/g, "")
+      .replace(/<[^>]+>/g, "")
+      .trim()
+    if (text) cues.push({ timestamp, speaker, text })
   }
-  return lines
+  return cues
+}
+
+// Parse VTT into plain text, merging consecutive cues from the same speaker.
+// Output: "Speaker Name: full sentence\n\nNext Speaker: their text"
+function parseVTTToText(vtt: string): string {
+  const cues = extractCues(vtt)
+  const merged: { speaker: string; text: string }[] = []
+  for (const cue of cues) {
+    const last = merged[merged.length - 1]
+    if (last && last.speaker === cue.speaker) {
+      last.text = last.text.trimEnd() + " " + cue.text
+    } else {
+      merged.push({ speaker: cue.speaker, text: cue.text })
+    }
+  }
+  return merged
+    .map((m) => (m.speaker ? `${m.speaker}: ${m.text}` : m.text))
+    .join("\n\n")
+}
+
+// Parse VTT into structured lines for display, merging consecutive cues per speaker.
+function parseVTTToLines(vtt: string): TranscriptLine[] {
+  const cues = extractCues(vtt)
+  const merged: TranscriptLine[] = []
+  for (const cue of cues) {
+    const last = merged[merged.length - 1]
+    if (last && last.speaker === cue.speaker) {
+      last.text = last.text.trimEnd() + " " + cue.text
+    } else {
+      merged.push({ timestamp: cue.timestamp, speaker: cue.speaker, text: cue.text })
+    }
+  }
+  return merged
 }
 
 // Derive a meeting date from the file name (looks for YYYY-MM-DD or YYYY_MM_DD pattern)
