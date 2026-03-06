@@ -147,16 +147,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Network error fetching item metadata." }, { status: 502 })
   }
 
-  // ── Step 1: List transcripts via SharePoint /_api/v2.1/ ───────────────────
-  // The driveId must be the SharePoint base64 format (b!...) from parentReference.driveId
-  // The itemId is the Graph drive item ID (01HIVVPJ...) — accepted by /_api/v2.1/
-  // Reference URL from browser: {siteUrl}/_api/v2.1/drives/{spDriveId}/items/{itemId}/media/transcripts
-  const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${spDriveId}/items/${itemId}/media/transcripts`
+  // ── Step 1: List transcripts ───────────────────────────────────────────────
+  // The SharePoint /_api/v2.1/ rejects Graph item IDs (01HIVVPJ...).
+  // Use the Graph native endpoint instead:
+  //   GET /me/drive/items/{itemId}/media/transcripts
+  // This is the same data the browser fetches via SharePoint, exposed through Graph.
+  const transcriptsUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/media/transcripts`
   console.log("=".repeat(80))
   console.log("[v0] STEP 1 REQUEST >>>")
   console.log("[v0]   METHOD: GET")
   console.log("[v0]   URL:", transcriptsUrl)
-  console.log("[v0]   HEADERS: Authorization: Bearer <token truncated>, Accept: application/json")
+  console.log("[v0]   HEADERS: Authorization: Bearer <token>, Accept: application/json")
   console.log("=".repeat(80))
 
   let transcriptsData: { value: SharePointTranscript[] }
@@ -250,9 +251,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Network error downloading transcript." }, { status: 502 })
     }
   } else {
-    // Fallback: construct streamContent URL with auth header
-    const streamUrl = `${siteUrl}/_api/v2.1/drives/${spDriveId}/items/${itemId}/media/transcripts/${transcript.id}/streamContent?is=1&applymediaedits=false`
-    console.log("[v0] extract-transcript: Step 2 fallback – streaming via streamContent →", streamUrl)
+    // Fallback: Graph native streamContent endpoint
+    const streamUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/media/transcripts/${transcript.id}/content`
+    console.log("=".repeat(80))
+    console.log("[v0] STEP 2 FALLBACK REQUEST >>>")
+    console.log("[v0]   METHOD: GET")
+    console.log("[v0]   URL:", streamUrl)
+    console.log("=".repeat(80))
 
     try {
       const streamRes = await fetch(streamUrl, {
