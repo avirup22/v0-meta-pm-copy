@@ -12,12 +12,6 @@ export interface DriveItem {
   "@microsoft.graph.downloadUrl"?: string
 }
 
-export interface TranscriptLine {
-  timestamp: string
-  speaker: string
-  text: string
-}
-
 /**
  * Fetch a single Drive item by path under the authenticated user's OneDrive root.
  * e.g. path = "MetaPM"  →  /me/drive/root:/MetaPM

@@ -1,8 +1,4 @@
 import { NextRequest, NextResponse } from "next/server"
-import { spawn } from "child_process"
-import ffmpegPath from "ffmpeg-static"
-
-// ─── VTT parser ────────────────────────────────────────────────────────────────
 
 interface TranscriptLine {
   timestamp: string
@@ -10,10 +6,17 @@ interface TranscriptLine {
   text: string
 }
 
+interface GraphTranscript {
+  id: string
+  createdDateTime?: string
+  transcriptContentUrl?: string
+}
+
+// ─── VTT parser ────────────────────────────────────────────────────────────────
 function parseVTT(vttContent: string): TranscriptLine[] {
   const lines: TranscriptLine[] = []
   const blocks = vttContent.split(/\n\n+/)
-  console.log("[v0] parseVTT: total blocks to parse:", blocks.length)
+  console.log("[v0] parseVTT: total cue blocks:", blocks.length)
 
   for (const block of blocks) {
     const blockLines = block.trim().split("\n")
@@ -21,7 +24,6 @@ function parseVTT(vttContent: string): TranscriptLine[] {
     if (tsIdx === -1) continue
 
     const startTime = blockLines[tsIdx].split(" --> ")[0].trim()
-    // HH:MM:SS only, drop milliseconds
     const timestamp = startTime.replace(/\.\d{3}$/, "")
 
     const rawText = blockLines.slice(tsIdx + 1).join(" ").trim()
@@ -36,12 +38,11 @@ function parseVTT(vttContent: string): TranscriptLine[] {
     if (text) lines.push({ timestamp, speaker, text })
   }
 
-  console.log("[v0] parseVTT: parsed line count:", lines.length)
+  console.log("[v0] parseVTT: parsed lines:", lines.length)
   return lines
 }
 
 // ─── Route handler ─────────────────────────────────────────────────────────────
-
 export async function POST(req: NextRequest) {
   console.log("[v0] extract-transcript: POST received")
 
@@ -49,224 +50,100 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json()
   } catch {
-    console.error("[v0] extract-transcript: failed to parse request body")
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
   const { itemId, token } = body
-
   if (!itemId || !token) {
-    console.error("[v0] extract-transcript: missing itemId or token. itemId:", !!itemId, "token:", !!token)
+    console.error("[v0] extract-transcript: missing itemId or token")
     return NextResponse.json({ error: "Missing itemId or token" }, { status: 400 })
   }
 
-  console.log("[v0] extract-transcript: processing itemId:", itemId)
-  console.log("[v0] extract-transcript: ffmpeg binary path:", ffmpegPath)
+  console.log("[v0] extract-transcript: itemId:", itemId)
 
-  if (!ffmpegPath) {
-    console.error("[v0] extract-transcript: ffmpeg-static did not resolve a binary path")
-    return NextResponse.json({ error: "ffmpeg binary not available on this server." }, { status: 500 })
-  }
+  // ── Step 1: List transcripts for this drive item ───────────────────────────
+  // Uses the native SharePoint/Graph transcript API:
+  // GET /me/drive/items/{itemId}/media/transcripts
+  const transcriptsUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/media/transcripts`
+  console.log("[v0] extract-transcript: Step 1 – listing transcripts →", transcriptsUrl)
 
-  // ── Step 1: Get the OneDrive download URL via Graph API ──────────────────────
-  // NOTE: @microsoft.graph.downloadUrl is NOT returned when $select is used.
-  // We must fetch the full item (no $select) to get it, OR use the /content
-  // endpoint which returns a 302 redirect to the CDN download URL.
-  // We use /content with redirect:manual to capture the Location header.
-  const contentUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/content`
-  console.log("[v0] extract-transcript: resolving download URL via /content →", contentUrl)
-
-  let downloadUrl: string | undefined
-
-  // Primary: follow the redirect from /content
-  try {
-    const redirectRes = await fetch(contentUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-      redirect: "manual",
-    })
-    console.log("[v0] extract-transcript: /content response status:", redirectRes.status)
-    console.log("[v0] extract-transcript: /content response headers:", Object.fromEntries(redirectRes.headers.entries()))
-
-    if (redirectRes.status === 302 || redirectRes.status === 301) {
-      downloadUrl = redirectRes.headers.get("location") ?? undefined
-      console.log("[v0] extract-transcript: redirect location obtained, length:", downloadUrl?.length)
-    } else if (redirectRes.status === 200) {
-      // Some Graph versions return the file directly on 200
-      // In this case we stream directly from this response — handled below
-      console.log("[v0] extract-transcript: /content returned 200 directly (no redirect)")
-      downloadUrl = contentUrl  // sentinel — we'll re-fetch with auth below
-    } else {
-      const errBody = await redirectRes.json().catch(() => ({}))
-      const msg = (errBody as { error?: { message?: string } })?.error?.message ?? `HTTP ${redirectRes.status}`
-      console.error("[v0] extract-transcript: /content error:", msg)
-      return NextResponse.json({ error: `Graph API /content error: ${msg}` }, { status: redirectRes.status })
-    }
-  } catch (fetchErr) {
-    console.error("[v0] extract-transcript: network error on /content request:", fetchErr)
-    return NextResponse.json({ error: "Network error contacting Graph API." }, { status: 502 })
-  }
-
-  // Fallback: fetch full item metadata (no $select) to get @microsoft.graph.downloadUrl
-  if (!downloadUrl) {
-    console.log("[v0] extract-transcript: no redirect URL — falling back to full item metadata fetch")
-    const metaUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}`
-    console.log("[v0] extract-transcript: full metadata →", metaUrl)
-    try {
-      const metaRes = await fetch(metaUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      console.log("[v0] extract-transcript: metadata HTTP status:", metaRes.status)
-      if (metaRes.ok) {
-        const meta = await metaRes.json() as { id: string; name: string; size?: number; "@microsoft.graph.downloadUrl"?: string }
-        console.log("[v0] extract-transcript: item name:", meta.name, "| size:", meta.size)
-        console.log("[v0] extract-transcript: downloadUrl present:", !!meta["@microsoft.graph.downloadUrl"])
-        downloadUrl = meta["@microsoft.graph.downloadUrl"]
-      } else {
-        const errBody = await metaRes.json().catch(() => ({}))
-        const msg = (errBody as { error?: { message?: string } })?.error?.message ?? `HTTP ${metaRes.status}`
-        console.error("[v0] extract-transcript: metadata fallback error:", msg)
-        return NextResponse.json({ error: msg }, { status: metaRes.status })
-      }
-    } catch (fallbackErr) {
-      console.error("[v0] extract-transcript: fallback metadata fetch error:", fallbackErr)
-      return NextResponse.json({ error: "Failed to get download URL." }, { status: 502 })
-    }
-  }
-
-  if (!downloadUrl) {
-    console.error("[v0] extract-transcript: all strategies exhausted — no download URL available")
-    return NextResponse.json({ error: "No download URL returned by Graph API. Ensure the token has Files.Read scope." }, { status: 502 })
-  }
-  console.log("[v0] extract-transcript: download URL resolved successfully")
-
-  // ── Step 2: Stream the MP4 from OneDrive ─────────────────────────────────────
-  // If downloadUrl is the sentinel (the /content URL itself), we need to include
-  // the auth header so Graph can serve the file. For real CDN URLs no auth needed.
-  const isGraphUrl = downloadUrl.startsWith("https://graph.microsoft.com")
-  console.log("[v0] extract-transcript: initiating MP4 stream from OneDrive — isGraphUrl:", isGraphUrl)
-
-  let videoRes: Response
-  try {
-    videoRes = await fetch(downloadUrl, isGraphUrl
-      ? { headers: { Authorization: `Bearer ${token}` } }
-      : {}
-    )
-  } catch (streamErr) {
-    console.error("[v0] extract-transcript: network error opening video stream:", streamErr)
-    return NextResponse.json({ error: "Network error streaming video from OneDrive." }, { status: 502 })
-  }
-
-  console.log("[v0] extract-transcript: video stream HTTP status:", videoRes.status)
-  console.log("[v0] extract-transcript: video content-type:", videoRes.headers.get("content-type"))
-  console.log("[v0] extract-transcript: video content-length:", videoRes.headers.get("content-length"))
-
-  if (!videoRes.ok || !videoRes.body) {
-    console.error("[v0] extract-transcript: failed to open video stream")
-    return NextResponse.json({ error: `Failed to stream video: HTTP ${videoRes.status}` }, { status: 502 })
-  }
-
-  // ── Step 3: Pipe into ffmpeg, extract embedded subtitle track ────────────────
-  // Command:  ffmpeg -i pipe:0 -map 0:s:0 -f webvtt pipe:1
-  // - pipe:0  = stdin (MP4 bytes streamed from OneDrive)
-  // - 0:s:0   = first subtitle stream in the container
-  // - webvtt  = output as plain WebVTT text
-  // - pipe:1  = stdout (captured by us)
-  console.log("[v0] extract-transcript: spawning ffmpeg:", ffmpegPath)
-  console.log("[v0] extract-transcript: ffmpeg args: -i pipe:0 -map 0:s:0 -f webvtt pipe:1")
-
-  return new Promise<NextResponse>((resolve) => {
-    const ffmpeg = spawn(ffmpegPath!, [
-      "-i", "pipe:0",
-      "-map", "0:s:0",
-      "-f", "webvtt",
-      "pipe:1",
-    ], {
-      stdio: ["pipe", "pipe", "pipe"],
-    })
-
-    const stdoutChunks: Buffer[] = []
-    const stderrChunks: Buffer[] = []
-    let bytesWrittenToFfmpeg = 0
-
-    ffmpeg.stdout.on("data", (chunk: Buffer) => {
-      stdoutChunks.push(chunk)
-    })
-
-    ffmpeg.stderr.on("data", (chunk: Buffer) => {
-      stderrChunks.push(chunk)
-      // Print ffmpeg stderr incrementally so we can see progress
-      process.stdout.write("[v0][ffmpeg] " + chunk.toString())
-    })
-
-    ffmpeg.on("error", (err) => {
-      console.error("[v0] extract-transcript: ffmpeg spawn error:", err.message)
-      resolve(NextResponse.json({ error: `ffmpeg spawn error: ${err.message}` }, { status: 500 }))
-    })
-
-    ffmpeg.on("close", (code, signal) => {
-      const stderrFull = Buffer.concat(stderrChunks).toString("utf-8")
-      console.log("[v0] extract-transcript: ffmpeg closed — code:", code, "| signal:", signal)
-      console.log("[v0] extract-transcript: bytes written to ffmpeg stdin:", bytesWrittenToFfmpeg)
-      console.log("[v0] extract-transcript: stdout bytes collected:", stdoutChunks.reduce((s, c) => s + c.length, 0))
-
-      if (code !== 0) {
-        // Try to give a helpful hint from the stderr log
-        const hasSubtitle = stderrFull.toLowerCase().includes("subtitle")
-        const hint = hasSubtitle
-          ? "Subtitle track detected but could not be extracted. The track may be an image-based format (MOV_TEXT, DVDSUB) rather than text."
-          : "No embedded text subtitle/transcript stream found in this MP4."
-        console.error("[v0] extract-transcript: ffmpeg non-zero exit. hint:", hint)
-        console.error("[v0] extract-transcript: last 1000 chars of stderr:\n", stderrFull.slice(-1000))
-        resolve(
-          NextResponse.json({
-            error: hint,
-            ffmpegLog: stderrFull.slice(-2000),
-          }, { status: 422 })
-        )
-        return
-      }
-
-      const vttText = Buffer.concat(stdoutChunks).toString("utf-8")
-      console.log("[v0] extract-transcript: VTT output length:", vttText.length, "chars")
-      console.log("[v0] extract-transcript: VTT preview (first 300 chars):", vttText.slice(0, 300))
-
-      if (!vttText.trim()) {
-        console.warn("[v0] extract-transcript: ffmpeg succeeded but VTT output is empty")
-        resolve(NextResponse.json({ error: "Transcript extracted but was empty." }, { status: 422 }))
-        return
-      }
-
-      const lines = parseVTT(vttText)
-      console.log("[v0] extract-transcript: final transcript lines:", lines.length)
-      resolve(NextResponse.json({ lines, rawVtt: vttText }))
-    })
-
-    // ── Pump OneDrive stream → ffmpeg stdin ───────────────────────────────────
-    const reader = videoRes.body!.getReader()
-
-    async function pump() {
-      console.log("[v0] extract-transcript: starting stdin pump")
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) {
-            console.log("[v0] extract-transcript: stream ended — closing ffmpeg stdin. Total bytes:", bytesWrittenToFfmpeg)
-            ffmpeg.stdin.end()
-            break
-          }
-          bytesWrittenToFfmpeg += value.byteLength
-          const canContinue = ffmpeg.stdin.write(value)
-          if (!canContinue) {
-            // Back-pressure: wait for drain before writing more
-            await new Promise<void>((res) => ffmpeg.stdin.once("drain", res))
-          }
-        }
-      } catch (pumpErr) {
-        console.error("[v0] extract-transcript: pump error:", pumpErr)
-        ffmpeg.stdin.destroy()
-      }
-    }
-
-    pump()
+  const transcriptsRes = await fetch(transcriptsUrl, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
   })
+
+  console.log("[v0] extract-transcript: transcripts list HTTP status:", transcriptsRes.status)
+
+  if (!transcriptsRes.ok) {
+    const errBody = await transcriptsRes.json().catch(() => ({}))
+    const msg = (errBody as { error?: { message?: string } })?.error?.message ?? `HTTP ${transcriptsRes.status}`
+    console.error("[v0] extract-transcript: transcripts list error:", msg)
+    console.error("[v0] extract-transcript: full error body:", JSON.stringify(errBody))
+    return NextResponse.json({ error: `Failed to list transcripts: ${msg}` }, { status: transcriptsRes.status })
+  }
+
+  const transcriptsData = await transcriptsRes.json() as { value: GraphTranscript[] }
+  console.log("[v0] extract-transcript: transcripts found:", transcriptsData.value?.length ?? 0)
+  console.log("[v0] extract-transcript: transcripts data:", JSON.stringify(transcriptsData.value))
+
+  if (!transcriptsData.value || transcriptsData.value.length === 0) {
+    console.warn("[v0] extract-transcript: no transcripts available for this item")
+    return NextResponse.json(
+      { error: "No transcript found for this recording. The meeting transcript may not have been generated yet." },
+      { status: 404 }
+    )
+  }
+
+  // Use the first (most recent) transcript
+  const transcript = transcriptsData.value[0]
+  console.log("[v0] extract-transcript: using transcript id:", transcript.id, "| created:", transcript.createdDateTime)
+
+  // ── Step 2: Stream the transcript content ─────────────────────────────────
+  // GET /me/drive/items/{itemId}/media/transcripts/{transcriptId}/streamContent
+  const streamUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/media/transcripts/${transcript.id}/streamContent`
+  console.log("[v0] extract-transcript: Step 2 – streaming transcript content →", streamUrl)
+
+  const streamRes = await fetch(streamUrl, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  console.log("[v0] extract-transcript: stream HTTP status:", streamRes.status)
+  console.log("[v0] extract-transcript: stream content-type:", streamRes.headers.get("content-type"))
+  console.log("[v0] extract-transcript: stream content-length:", streamRes.headers.get("content-length"))
+
+  if (!streamRes.ok) {
+    const errText = await streamRes.text().catch(() => "")
+    console.error("[v0] extract-transcript: stream error body:", errText)
+    return NextResponse.json(
+      { error: `Failed to stream transcript content: HTTP ${streamRes.status}` },
+      { status: streamRes.status }
+    )
+  }
+
+  const vttText = await streamRes.text()
+  console.log("[v0] extract-transcript: VTT content length:", vttText.length, "chars")
+  console.log("[v0] extract-transcript: VTT preview (first 400 chars):\n", vttText.slice(0, 400))
+
+  if (!vttText.trim()) {
+    console.warn("[v0] extract-transcript: transcript content was empty")
+    return NextResponse.json({ error: "Transcript content was empty." }, { status: 422 })
+  }
+
+  // ── Step 3: Parse VTT → structured lines ──────────────────────────────────
+  const lines = parseVTT(vttText)
+  console.log("[v0] extract-transcript: final line count:", lines.length)
+
+  if (lines.length === 0) {
+    console.warn("[v0] extract-transcript: VTT parsed but no cue lines found")
+    return NextResponse.json(
+      { error: "Transcript was found but could not be parsed into lines.", rawVtt: vttText },
+      { status: 422 }
+    )
+  }
+
+  return NextResponse.json({ lines, rawVtt: vttText.slice(0, 1000) })
 }
