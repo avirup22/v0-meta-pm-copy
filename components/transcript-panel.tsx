@@ -110,14 +110,15 @@ export function TranscriptPanel() {
   }
 
   async function handleConfirm() {
-    if (!pendingFile?.driveItemId || !token) {
+    // Local file upload — no transcript extraction
+    if (!pendingFile?.driveItemId) {
       setMode("done")
       setTranscriptLines([])
       return
     }
 
     if (!pendingFile.driveId || !pendingFile.siteUrl) {
-      setExtractError("Missing driveId or siteUrl on selected recording. Please re-select the meeting.")
+      setExtractError("Missing driveId or siteUrl. Re-select the meeting from the dropdown.")
       setMode("error")
       return
     }
@@ -127,43 +128,107 @@ export function TranscriptPanel() {
     setApiLogs([])
     setTranscriptLines([])
 
-    console.log("[v0] TranscriptPanel handleConfirm:")
-    console.log("[v0]   itemId  :", pendingFile.driveItemId)
-    console.log("[v0]   driveId :", pendingFile.driveId)
-    console.log("[v0]   siteUrl :", pendingFile.siteUrl)
+    const { driveItemId, driveId, siteUrl } = pendingFile
+    const logs: ApiLog[] = []
 
     try {
-      const res = await fetch("/api/extract-transcript", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          itemId: pendingFile.driveItemId,
-          driveId: pendingFile.driveId,
-          siteUrl: pendingFile.siteUrl,
-          token,
-        }),
+      // ── CALL 1: List transcripts ──────────────────────────────────────────
+      // Exact URL pattern confirmed from browser network tab
+      const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${driveItemId}/media/transcripts`
+
+      const call1Res = await fetch(transcriptsUrl, {
+        credentials: "include",        // use browser session cookie — no token needed
+        headers: { Accept: "application/json" },
       })
+      const call1Body = await call1Res.text()
 
-      const data = await res.json() as {
-        lines?: TranscriptLine[]
-        error?: string
-        logs?: ApiLog[]
-        rawVtt?: string
+      logs.push({
+        step: 1,
+        label: "List transcripts",
+        url: transcriptsUrl,
+        status: call1Res.status,
+        responsePreview: call1Body,
+      })
+      setApiLogs([...logs])
+
+      if (!call1Res.ok) {
+        throw new Error(`Transcript list failed (HTTP ${call1Res.status}): ${call1Body.slice(0, 200)}`)
       }
 
-      if (data.logs) setApiLogs(data.logs)
+      const transcriptsData = JSON.parse(call1Body) as { value: { id: string; isDefault?: boolean; temporaryDownloadUrl?: string }[] }
+      const transcripts = transcriptsData.value ?? []
 
-      if (!res.ok || data.error) {
-        throw new Error(data.error ?? `Server error: HTTP ${res.status}`)
+      if (transcripts.length === 0) {
+        throw new Error("No transcripts found for this recording.")
       }
 
-      setTranscriptLines(data.lines ?? [])
+      // Pick the default transcript, or the first one
+      const transcript = transcripts.find((t) => t.isDefault) ?? transcripts[0]
+
+      // ── CALL 2: Stream transcript content ─────────────────────────────────
+      // If a pre-signed temporaryDownloadUrl is available, use it directly.
+      // Otherwise construct the streamContent URL.
+      let vttText = ""
+
+      if (transcript.temporaryDownloadUrl) {
+        const call2Res = await fetch(transcript.temporaryDownloadUrl)
+        vttText = await call2Res.text()
+
+        logs.push({
+          step: 2,
+          label: "Download VTT (temporaryDownloadUrl)",
+          url: transcript.temporaryDownloadUrl.slice(0, 120) + "...",
+          status: call2Res.status,
+          responsePreview: vttText.slice(0, 500),
+        })
+      } else {
+        const streamUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${driveItemId}/media/transcripts/${transcript.id}/streamContent?is=1&applymediaedits=false`
+
+        const call2Res = await fetch(streamUrl, {
+          credentials: "include",
+          headers: { Accept: "*/*" },
+        })
+        vttText = await call2Res.text()
+
+        logs.push({
+          step: 2,
+          label: "Stream transcript content",
+          url: streamUrl,
+          status: call2Res.status,
+          responsePreview: vttText.slice(0, 500),
+        })
+      }
+
+      setApiLogs([...logs])
+
+      // ── Parse VTT ─────────────────────────────────────────────────────────
+      const lines = parseVTT(vttText)
+      setTranscriptLines(lines)
       setMode("done")
+
     } catch (err: unknown) {
+      setApiLogs([...logs])
       const msg = err instanceof Error ? err.message : "Failed to extract transcript."
       setExtractError(msg)
       setMode("error")
     }
+  }
+
+  function parseVTT(vtt: string): TranscriptLine[] {
+    const lines: TranscriptLine[] = []
+    const blocks = vtt.split(/\n\n+/)
+    for (const block of blocks) {
+      const rows = block.trim().split("\n")
+      const tsIdx = rows.findIndex((l) => l.includes(" --> "))
+      if (tsIdx === -1) continue
+      const timestamp = rows[tsIdx].split(" --> ")[0].trim().replace(/\.\d{3}$/, "")
+      const rawText = rows.slice(tsIdx + 1).join(" ").trim()
+      const speakerMatch = rawText.match(/^<v ([^>]+)>/)
+      const speaker = speakerMatch ? speakerMatch[1] : ""
+      const text = rawText.replace(/<v [^>]+>/g, "").replace(/<\/v>/g, "").replace(/<[^>]+>/g, "").trim()
+      if (text) lines.push({ timestamp, speaker, text })
+    }
+    return lines
   }
 
   function handleCancel() {

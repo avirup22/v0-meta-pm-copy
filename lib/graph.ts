@@ -119,8 +119,8 @@ export async function fetchRecordingFiles(token: string): Promise<RecordingsResu
   const recordingsFolder = await getDriveItemByPath(token, "Recordings")
   console.log("[v0] fetchRecordingFiles – Recordings folder id:", recordingsFolder.id, "name:", recordingsFolder.name)
 
-  // Step 3 – list all children
-  const url = `${GRAPH_BASE}/me/drive/items/${recordingsFolder.id}/children?$select=id,name,file,folder,size,webUrl&$top=200&$orderby=name`
+  // Step 3 – list all children; include parentReference to get the SharePoint b!... driveId
+  const url = `${GRAPH_BASE}/me/drive/items/${recordingsFolder.id}/children?$select=id,name,file,folder,size,webUrl,parentReference&$top=200&$orderby=name`
   console.log("[v0] fetchRecordingFiles listing children →", url)
 
   const res = await fetch(url, {
@@ -136,20 +136,26 @@ export async function fetchRecordingFiles(token: string): Promise<RecordingsResu
     throw new Error(message)
   }
 
-  const data: { value: (DriveItem & { size?: number })[] } = await res.json()
+  const data: { value: (DriveItem & { size?: number; parentReference?: { driveId?: string; siteUrl?: string } })[] } = await res.json()
   console.log("[v0] fetchRecordingFiles raw item count:", data.value.length)
   console.log("[v0] fetchRecordingFiles raw names:", data.value.map((i) => i.name))
 
-  // Keep only files (not sub-folders); stamp driveId+siteUrl on each, strip extension
+  // Keep only files; use parentReference.driveId which is the SharePoint b!... format
+  // needed for the /_api/v2.1/ transcript endpoint
   const files = data.value
     .filter((item) => item.file !== undefined)
-    .map((item) => ({
-      ...item,
-      originalName: item.name,
-      name: item.name.replace(/\.[^/.]+$/, ""),
-      driveId,
-      siteUrl,
-    }))
+    .map((item) => {
+      const spDriveId = item.parentReference?.driveId ?? driveId
+      const spSiteUrl = item.parentReference?.siteUrl ?? siteUrl
+      console.log("[v0] fetchRecordingFiles item:", item.name, "| spDriveId:", spDriveId, "| spSiteUrl:", spSiteUrl)
+      return {
+        ...item,
+        originalName: item.name,
+        name: item.name.replace(/\.[^/.]+$/, ""),
+        driveId: spDriveId,
+        siteUrl: spSiteUrl,
+      }
+    })
 
   console.log(
     "[v0] fetchRecordingFiles final file list (",
