@@ -6,29 +6,38 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 
-const DEFAULT_PROJECTS = [
-  "Project A",
-  "Project B",
-  "Project C",
-  "Project D",
-  "Project E",
-  "Project F",
-  "Project G",
-  "Project H",
-  "Project H",
+interface Project {
+  name: string
+  slug: string
+}
+
+function toSlug(name: string) {
+  return name.toLowerCase().replace(/\s+/g, "-")
+}
+
+const DEFAULT_PROJECTS: Project[] = [
+  { name: "Project A", slug: "project-a" },
+  { name: "Project B", slug: "project-b" },
+  { name: "Project C", slug: "project-c" },
+  { name: "Project D", slug: "project-d" },
+  { name: "Project E", slug: "project-e" },
+  { name: "Project F", slug: "project-f" },
+  { name: "Project G", slug: "project-g" },
+  { name: "Project H", slug: "project-h" },
+  { name: "Project I", slug: "project-i" },
 ]
 
 export function ProjectGrid() {
   const [search, setSearch] = useState("")
-  const [projects, setProjects] = useState(DEFAULT_PROJECTS)
+  const [projects, setProjects] = useState<Project[]>(DEFAULT_PROJECTS)
 
   const filtered = projects.filter((p) =>
-    p.toLowerCase().includes(search.toLowerCase())
+    p.name.toLowerCase().includes(search.toLowerCase())
   )
 
   const handleCreateNew = () => {
     const name = `Project ${String.fromCharCode(65 + projects.length)}`
-    setProjects((prev) => [...prev, name])
+    setProjects((prev) => [...prev, { name, slug: toSlug(name) }])
   }
 
   return (
@@ -55,8 +64,8 @@ export function ProjectGrid() {
       {/* Project grid */}
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((project, idx) => (
-            <ProjectCard key={`${project}-${idx}`} name={project} />
+          {filtered.map((project) => (
+            <ProjectCard key={project.slug} name={project.name} slug={project.slug} />
           ))}
         </div>
       ) : (

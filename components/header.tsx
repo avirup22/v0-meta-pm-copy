@@ -1,17 +1,19 @@
 "use client"
 
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
-export function Header() {
+interface HeaderProps {
+  authenticated?: boolean
+}
+
+export function Header({ authenticated = false }: HeaderProps) {
   return (
     <header className="bg-card border-b border-border">
       <div className="max-w-6xl mx-auto px-8 h-16 flex items-center justify-between">
-        <span
-          className="text-2xl font-bold tracking-tight font-sans"
-          style={{ color: "var(--brand-teal)" }}
-        >
+        <Link href="/" className="text-2xl font-bold tracking-tight font-sans" style={{ color: "var(--brand-teal)" }}>
           MetaPM
-        </span>
+        </Link>
 
         <div className="flex items-center gap-4">
           <span className="text-sm text-foreground font-sans">Hi Sarvesh</span>
@@ -19,7 +21,7 @@ export function Header() {
             className="rounded-lg px-5 font-sans font-medium"
             style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
           >
-            Authenticate
+            {authenticated ? "Authenticated" : "Authenticate"}
           </Button>
         </div>
       </div>
