@@ -85,16 +85,15 @@ export async function listFolderChildren(
 }
 
 /**
- * List all files (any type) inside Documents/Recordings.
- * Teams stores recordings at: OneDrive root → Documents → Recordings
+ * List all files (any type) inside the root-level "Recordings" folder.
+ * OneDrive drive root → Recordings → [mp4 files]
  * Strips the file extension from each name before returning.
  */
 export async function fetchRecordingFiles(token: string): Promise<DriveItem[]> {
-  console.log("[v0] fetchRecordingFiles: starting – looking for Documents/Recordings")
+  console.log("[v0] fetchRecordingFiles: starting – looking for Recordings at drive root")
 
-  // Step 1 – resolve Documents/Recordings by path
-  // The SharePoint Stream URL confirms the path is /Documents/Recordings/...
-  const recordingsFolder = await getDriveItemByPath(token, "Documents/Recordings")
+  // Step 1 – resolve the Recordings folder directly at the drive root
+  const recordingsFolder = await getDriveItemByPath(token, "Recordings")
   console.log("[v0] fetchRecordingFiles – Recordings folder id:", recordingsFolder.id, "name:", recordingsFolder.name)
 
   // Step 2 – list all children (files and sub-folders)
