@@ -1,17 +1,34 @@
+
 "use client"
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { FileText, Upload, Video, X, CheckCircle, Loader2, ChevronDown } from "lucide-react"
+import {
+  FileText,
+  Upload,
+  Video,
+  X,
+  CheckCircle,
+  Loader2,
+  ChevronDown,
+  AlertCircle,
+} from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { fetchRecordingFiles, type DriveItem } from "@/lib/graph"
+import {
+  fetchRecordingFiles,
+  fetchTranscriptForRecording,
+  type DriveItem,
+  type TranscriptLine,
+} from "@/lib/graph"
 
-type Mode = "idle" | "upload-confirm" | "meeting-search" | "confirmed"
+type Mode = "idle" | "upload-confirm" | "meeting-search" | "extracting" | "done" | "error"
 
 interface PendingFile {
   name: string
   sizeKB: number
+  driveItemId?: string
+  originalName?: string
 }
 
 export function TranscriptPanel() {
@@ -28,6 +45,11 @@ export function TranscriptPanel() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // Transcript state
+  const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([])
+  const [extractError, setExtractError] = useState<string | null>(null)
+  const transcriptRef = useRef<HTMLDivElement>(null)
+
   // Fetch recordings when entering meeting-search mode
   useEffect(() => {
     if (mode !== "meeting-search") return
@@ -35,25 +57,18 @@ export function TranscriptPanel() {
       setRecordingsError("No authentication token available.")
       return
     }
-
     setRecordingsLoading(true)
     setRecordingsError(null)
-    console.log("[v0] TranscriptPanel: fetching recordings with token")
-
     fetchRecordingFiles(token)
       .then((files) => {
-        console.log("[v0] TranscriptPanel: recordings loaded:", files.map((f) => f.name))
         setRecordings(files)
         setDropdownOpen(true)
       })
-      .catch((err) => {
-        console.error("[v0] TranscriptPanel: recordings fetch error:", err.message)
-        setRecordingsError(err.message)
-      })
+      .catch((err) => setRecordingsError(err.message))
       .finally(() => setRecordingsLoading(false))
   }, [mode, token])
 
-  // Close dropdown when clicking outside
+  // Close dropdown on outside click
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -64,6 +79,13 @@ export function TranscriptPanel() {
     return () => document.removeEventListener("mousedown", handleOutsideClick)
   }, [])
 
+  // Scroll to bottom of transcript when new lines arrive
+  useEffect(() => {
+    if (transcriptRef.current) {
+      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
+    }
+  }, [transcriptLines])
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -72,8 +94,31 @@ export function TranscriptPanel() {
     e.target.value = ""
   }
 
-  function handleConfirm() {
-    setMode("confirmed")
+  async function handleConfirm() {
+    if (!pendingFile?.driveItemId || !token) {
+      // Local file upload — no extraction possible yet
+      setMode("done")
+      setTranscriptLines([])
+      return
+    }
+
+    setMode("extracting")
+    setExtractError(null)
+    setTranscriptLines([])
+
+    try {
+      const lines = await fetchTranscriptForRecording(
+        token,
+        pendingFile.driveItemId,
+        pendingFile.originalName ?? pendingFile.name
+      )
+      setTranscriptLines(lines)
+      setMode("done")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to extract transcript."
+      setExtractError(msg)
+      setMode("error")
+    }
   }
 
   function handleCancel() {
@@ -82,12 +127,18 @@ export function TranscriptPanel() {
     setRecordings([])
     setRecordingsError(null)
     setDropdownOpen(false)
+    setTranscriptLines([])
+    setExtractError(null)
     setMode("idle")
   }
 
   function handleMeetingSelect(item: DriveItem) {
-    console.log("[v0] TranscriptPanel: meeting selected:", item.name)
-    setPendingFile({ name: item.name, sizeKB: 0 })
+    setPendingFile({
+      name: item.name,
+      sizeKB: 0,
+      driveItemId: item.id,
+      originalName: item.originalName ?? item.name,
+    })
     setMode("upload-confirm")
     setDropdownOpen(false)
   }
@@ -147,7 +198,6 @@ export function TranscriptPanel() {
             </button>
           </div>
 
-          {/* Dropdown trigger */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen((v) => !v)}
@@ -158,16 +208,15 @@ export function TranscriptPanel() {
               <span className="text-muted-foreground">
                 {recordingsLoading ? "Loading meetings..." : "Select a meeting"}
               </span>
-              {recordingsLoading
-                ? <Loader2 size={15} className="animate-spin text-muted-foreground" />
-                : <ChevronDown size={15} className="text-muted-foreground" />
-              }
+              {recordingsLoading ? (
+                <Loader2 size={15} className="animate-spin text-muted-foreground" />
+              ) : (
+                <ChevronDown size={15} className="text-muted-foreground" />
+              )}
             </button>
 
-            {/* Dropdown panel */}
             {dropdownOpen && !recordingsLoading && (
               <div className="absolute z-20 mt-1 w-full bg-card border border-border rounded-lg shadow-lg overflow-hidden">
-                {/* Search inside dropdown */}
                 <div className="p-2 border-b border-border">
                   <Input
                     className="h-8 text-sm font-sans"
@@ -247,19 +296,78 @@ export function TranscriptPanel() {
         </div>
       )}
 
-      {/* CONFIRMED */}
-      {mode === "confirmed" && pendingFile && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-sm font-sans text-foreground">
-            <CheckCircle size={16} className="text-green-500 shrink-0" />
-            <span>{pendingFile.name} selected successfully.</span>
+      {/* EXTRACTING */}
+      {mode === "extracting" && (
+        <div className="flex flex-col items-center gap-4 py-4">
+          <Loader2 size={28} className="animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground font-sans text-center">
+            Extracting transcript from recording...
+          </p>
+        </div>
+      )}
+
+      {/* ERROR */}
+      {mode === "error" && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-lg p-3">
+            <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+            <p className="text-sm text-red-600 font-sans">{extractError}</p>
           </div>
           <button
             onClick={handleCancel}
             className="text-xs text-muted-foreground hover:text-primary font-sans transition-colors text-left"
           >
-            Choose a different transcript
+            Try again
           </button>
+        </div>
+      )}
+
+      {/* DONE: transcript viewer */}
+      {mode === "done" && pendingFile && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle size={16} className="text-green-500 shrink-0" />
+            <span className="text-sm font-medium text-foreground font-sans truncate">
+              {pendingFile.name}
+            </span>
+            <button
+              onClick={handleCancel}
+              className="ml-auto text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              aria-label="Close transcript"
+            >
+              <X size={15} />
+            </button>
+          </div>
+
+          {transcriptLines.length === 0 ? (
+            <div className="bg-secondary rounded-lg px-4 py-3 text-sm text-muted-foreground font-sans">
+              Transcript uploaded. No parsed lines to display.
+            </div>
+          ) : (
+            <div
+              ref={transcriptRef}
+              className="flex flex-col gap-3 max-h-96 overflow-y-auto pr-1"
+              aria-label="Extracted transcript"
+            >
+              {transcriptLines.map((line, idx) => (
+                <div key={idx} className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-primary font-mono font-medium shrink-0">
+                      {line.timestamp}
+                    </span>
+                    {line.speaker && (
+                      <span className="text-xs font-semibold text-muted-foreground font-sans truncate">
+                        {line.speaker}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-foreground font-sans leading-relaxed">
+                    {line.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </aside>
