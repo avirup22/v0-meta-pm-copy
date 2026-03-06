@@ -107,12 +107,11 @@ export async function fetchRecordingFiles(token: string): Promise<RecordingsResu
     const body = await driveMetaRes.json().catch(() => ({}))
     throw new Error(body?.error?.message ?? `HTTP ${driveMetaRes.status}`)
   }
-  const driveMeta: { id: string; webUrl: string } = await driveMetaRes.json()
+  const driveMeta: { id: string; webUrl: string; sharepointIds?: { siteId?: string; tenantId?: string } } = await driveMetaRes.json()
+  // driveMeta.id is the SharePoint base64 b!... driveId — use this for /_api/v2.1/ calls
   const driveId = driveMeta.id
-  // webUrl looks like: https://indegene123-my.sharepoint.com/personal/sarvesh_koyande_indegene_com/Documents
-  // We want just the site root up to the personal path segment
-  const siteUrl = driveMeta.webUrl.replace(/\/Documents.*$/, "")
-  console.log("[v0] fetchRecordingFiles: driveId:", driveId)
+  const siteUrl = driveMeta.webUrl.replace(/\/Documents.*$/, "").replace(/\/$/, "")
+  console.log("[v0] fetchRecordingFiles: driveId (b!... format):", driveId)
   console.log("[v0] fetchRecordingFiles: siteUrl:", siteUrl)
 
   // Step 2 – resolve the Recordings folder directly at the drive root
@@ -156,33 +155,21 @@ export async function fetchRecordingFiles(token: string): Promise<RecordingsResu
     console.log("[v0] fetchRecordingFiles first item parentReference:", JSON.stringify(data.value[0].parentReference))
   }
 
-  // Keep only files; use parentReference.driveId (the b!... SharePoint format)
+  // Use drive-level driveId (b!... format from GET /me/drive) — it's the same for all items.
+  // Derive siteUrl from each item's webUrl (most reliable).
   const files = data.value
     .filter((item) => item.file !== undefined)
     .map((item) => {
-      const spDriveId = item.parentReference?.driveId ?? driveId
-      // siteUrl comes from parentReference.siteUrl or sharepointIds.siteUrl
-      // Derive siteUrl from the item's own webUrl — most reliable source
-      // webUrl = https://indegene123-my.sharepoint.com/personal/xxx/Documents/Recordings/file.mp4
-      // We want: https://indegene123-my.sharepoint.com/personal/xxx
-      let spSiteUrl = siteUrl
-      if (item.webUrl) {
-        const match = item.webUrl.match(/^(https:\/\/[^/]+\/personal\/[^/]+)/)
-        if (match) spSiteUrl = match[1]
-      }
-      spSiteUrl =
-        spSiteUrl ||
-        item.parentReference?.siteUrl ||
-        item.parentReference?.sharepointIds?.siteUrl ||
-        item.sharepointIds?.siteUrl ||
-        siteUrl
-      console.log("[v0] fetchRecordingFiles item:", item.name, "| spDriveId:", spDriveId, "| spSiteUrl:", spSiteUrl)
+      const itemSiteUrl = item.webUrl
+        ? item.webUrl.match(/^(https:\/\/[^/]+\/personal\/[^/]+)/)?.[1] ?? siteUrl
+        : siteUrl
+      console.log("[v0] fetchRecordingFiles item:", item.name, "| driveId:", driveId, "| siteUrl:", itemSiteUrl)
       return {
         ...item,
         originalName: item.name,
         name: item.name.replace(/\.[^/.]+$/, ""),
-        driveId: spDriveId,
-        siteUrl: spSiteUrl,
+        driveId,        // b!... format from GET /me/drive — correct for /_api/v2.1/
+        siteUrl: itemSiteUrl,
       }
     })
 

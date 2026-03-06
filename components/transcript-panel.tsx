@@ -133,8 +133,8 @@ export function TranscriptPanel() {
 
     try {
       // ── CALL 1: List transcripts ──────────────────────────────────────────
-      // Exact URL pattern confirmed from browser network tab
       const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${driveItemId}/media/transcripts`
+      console.log("[v0] CALL 1 →", transcriptsUrl)
 
       const call1Res = await fetch(transcriptsUrl, {
         credentials: "include",        // use browser session cookie — no token needed
