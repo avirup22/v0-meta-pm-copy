@@ -53,74 +53,89 @@ interface TranscriptPanelProps {
 }
 
 // Extract all raw cues from a VTT string.
-// Handles both standard VTT (blank-line separated blocks) and
-// the SharePoint/Teams format where UUID cue IDs and timestamps appear
-// on the same line or with no blank-line separation.
+// Handles the SharePoint/Teams format where everything is on one line:
+//   UUID/10-0 HH:MM:SS.mmm --> HH:MM:SS.mmm text UUID/10-1 HH:MM:SS.mmm --> ...
+// As well as standard multi-line VTT with <v Speaker> tags.
 function extractCues(vtt: string): { timestamp: string; speaker: string; text: string }[] {
+  // Step 1: Normalise line endings
+  let s = vtt.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+
+  // Step 2: Insert a special delimiter BEFORE every UUID cue id so we can split on them.
+  // UUID cue pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/digit(s)-digit(s)
+  const UUID_CUE_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[\d]+-[\d]+)/gi
+  s = s.replace(UUID_CUE_RE, "\n§CUE§$1\n")
+
+  // Step 3: Split into raw cue chunks on our delimiter
+  const chunks = s.split(/\n§CUE§/)
+
+  // The first chunk is the WEBVTT header — skip it, but keep any speaker name
+  // that appears at the end of the previous chunk (teams puts speaker name there)
   const cues: { timestamp: string; speaker: string; text: string }[] = []
 
-  // Normalise: ensure every timestamp line is preceded by a newline
-  // so we can reliably split on it.
-  // Timestamp pattern: HH:MM:SS.mmm --> HH:MM:SS.mmm (with optional position data)
-  const TS_RE = /(\d{1,2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[.,]\d{3}[^\n]*)/g
+  // Track current speaker — Teams VTT puts speaker name AFTER the cue text
+  // of the PREVIOUS cue (i.e. it trails the text, before the next UUID).
+  // e.g.: "...text.\nSneha Ushir\neac33c3b.../10-0 00:00:04.048 --> ..."
+  // So the speaker name for cue N is found at the END of chunk N-1.
 
-  // Replace any UUID-style cue identifiers (e.g. "abc.../10-0") with a newline marker
-  // so they don't get confused with text content
-  const UUID_CUE_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[\d-]+/gi
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i].trim()
+    if (!chunk) continue
 
-  // First: normalise line endings
-  let normalised = vtt.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    // Find the timestamp line: HH:MM:SS.mmm --> HH:MM:SS.mmm
+    const tsMatch = chunk.match(/(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3})/)
+    if (!tsMatch) continue
 
-  // Remove UUID cue IDs (replace with blank line to keep block separation)
-  normalised = normalised.replace(UUID_CUE_RE, "\n")
+    const timestamp = tsMatch[1].replace(/[.,]\d{3}$/, "")
+    const afterTs = chunk.slice(chunk.indexOf(tsMatch[0]) + tsMatch[0].length).trim()
 
-  // Ensure each timestamp starts on its own line
-  normalised = normalised.replace(TS_RE, "\n$1\n")
+    // Strip any <v Speaker> tags — get plain text
+    let text = afterTs
+      .replace(/<v [^>]+>/g, "")
+      .replace(/<\/v>/g, "")
+      .replace(/<[^>]+>/g, "")
+      .trim()
 
-  // Now split into blocks by blank lines as standard
-  const blocks = normalised.split(/\n{2,}/)
-
-  for (const block of blocks) {
-    const rows = block.trim().split("\n").map((r) => r.trim()).filter(Boolean)
-    if (rows.length === 0) continue
-
-    const tsIdx = rows.findIndex((l) => l.includes(" --> "))
-    if (tsIdx === -1) continue
-
-    const timestamp = rows[tsIdx].split(" --> ")[0].trim().replace(/[.,]\d{3}.*$/, "")
-
-    // Text content is everything after the timestamp line
-    const rawText = rows.slice(tsIdx + 1).join(" ").trim()
-    if (!rawText) continue
-
-    // Speaker can be in <v Speaker> tag or on the line just before the timestamp
-    const vTagMatch = rawText.match(/^<v ([^>]+)>/)
+    // Speaker: look for <v Name> tag in this chunk first
     let speaker = ""
-    let text = rawText
-
+    const vTagMatch = afterTs.match(/^<v ([^>]+)>/)
     if (vTagMatch) {
       speaker = vTagMatch[1].trim()
-      text = rawText
-        .replace(/<v [^>]+>/g, "")
-        .replace(/<\/v>/g, "")
-        .replace(/<[^>]+>/g, "")
-        .trim()
     } else {
-      // Check if the line before the timestamp looks like a speaker name
-      // (not a UUID, not a timestamp, not "WEBVTT")
-      if (tsIdx > 0) {
-        const candidate = rows[tsIdx - 1]
-        if (
-          candidate &&
-          !candidate.includes("-->") &&
-          !candidate.match(/^WEBVTT/i) &&
-          !candidate.match(/^[0-9a-f-]{36}/i) &&
-          candidate.length < 80
-        ) {
-          speaker = candidate
+      // Teams format: speaker name is the LAST non-empty line of the PREVIOUS chunk
+      // (it trails after the previous cue's text)
+      if (i > 0) {
+        const prevChunk = chunks[i - 1] ?? ""
+        // Get lines after the timestamp of the previous chunk
+        const prevTsMatch = prevChunk.match(/\d{1,2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[.,]\d{3}/)
+        const afterPrevTs = prevTsMatch
+          ? prevChunk.slice(prevChunk.indexOf(prevTsMatch[0]) + prevTsMatch[0].length)
+          : prevChunk
+        const prevLines = afterPrevTs
+          .split("\n")
+          .map((l) => l.replace(/<[^>]+>/g, "").trim())
+          .filter(Boolean)
+        // The last line of prevLines that looks like a name (not a timestamp, not UUID)
+        for (let j = prevLines.length - 1; j >= 0; j--) {
+          const candidate = prevLines[j]
+          if (
+            !candidate.includes("-->") &&
+            !candidate.match(/^\d{1,2}:\d{2}/) &&
+            !candidate.match(/^[0-9a-f-]{8}/i) &&
+            !candidate.match(/^WEBVTT/i) &&
+            candidate.length < 80 &&
+            candidate.length > 1
+          ) {
+            // Remove that name from the previous cue's text
+            if (cues.length > 0) {
+              cues[cues.length - 1].text = cues[cues.length - 1].text
+                .replace(new RegExp(`\\s*${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`), "")
+                .trim()
+            }
+            speaker = candidate
+            break
+          }
         }
       }
-      text = rawText.replace(/<[^>]+>/g, "").trim()
     }
 
     if (text) cues.push({ timestamp, speaker, text })
