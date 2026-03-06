@@ -27,7 +27,7 @@ interface PageProps {
 export default function ProjectPage({ params }: PageProps) {
   const { slug } = use(params)
   const projectName = slugToTitle(slug)
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, displayName } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
@@ -135,7 +135,7 @@ export default function ProjectPage({ params }: PageProps) {
           </section>
 
           {/* Transcript Panel */}
-          <TranscriptPanel />
+          <TranscriptPanel projectName={projectName} userName={displayName ?? "User"} />
         </div>
       </main>
     </div>

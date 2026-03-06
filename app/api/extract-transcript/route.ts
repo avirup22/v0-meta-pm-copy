@@ -17,6 +17,11 @@ function parseVTT(vtt: string) {
   return lines
 }
 
+function vttToPlainText(vtt: string): string {
+  const lines = parseVTT(vtt)
+  return lines.map((l) => (l.speaker ? `${l.speaker}: ${l.text}` : l.text)).join("\n")
+}
+
 export async function POST(req: NextRequest) {
   const { siteUrl, driveId, itemId } = await req.json() as {
     siteUrl: string
@@ -101,7 +106,8 @@ export async function POST(req: NextRequest) {
   }
 
   const lines = parseVTT(vttText)
+  const plainText = vttToPlainText(vttText)
   console.log("[v0] Parsed transcript lines:", lines.length)
 
-  return NextResponse.json({ lines, logs })
+  return NextResponse.json({ lines, plainText, logs })
 }

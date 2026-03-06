@@ -13,6 +13,7 @@ import {
   Loader2,
   ChevronDown,
   AlertCircle,
+  Send,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -39,13 +40,63 @@ type Mode = "idle" | "upload-confirm" | "meeting-search" | "extracting" | "done"
 interface PendingFile {
   name: string
   sizeKB: number
+  rawFile?: File          // the actual File object for local uploads
   driveItemId?: string
   driveId?: string
   siteUrl?: string
   originalName?: string
 }
 
-export function TranscriptPanel() {
+interface TranscriptPanelProps {
+  projectName?: string
+  userName?: string
+}
+
+// Parse a VTT file into plain readable text
+function parseVTTToText(vtt: string): string {
+  const lines: string[] = []
+  const blocks = vtt.split(/\n\n+/)
+  for (const block of blocks) {
+    const rows = block.trim().split("\n")
+    const tsIdx = rows.findIndex((l) => l.includes(" --> "))
+    if (tsIdx === -1) continue
+    const rawText = rows.slice(tsIdx + 1).join(" ").trim()
+    const speakerMatch = rawText.match(/^<v ([^>]+)>/)
+    const speaker = speakerMatch ? speakerMatch[1] : ""
+    const text = rawText.replace(/<v [^>]+>/g, "").replace(/<\/v>/g, "").replace(/<[^>]+>/g, "").trim()
+    if (text) {
+      lines.push(speaker ? `${speaker}: ${text}` : text)
+    }
+  }
+  return lines.join("\n")
+}
+
+// Parse a VTT file into structured lines for display
+function parseVTTToLines(vtt: string): TranscriptLine[] {
+  const lines: TranscriptLine[] = []
+  const blocks = vtt.split(/\n\n+/)
+  for (const block of blocks) {
+    const rows = block.trim().split("\n")
+    const tsIdx = rows.findIndex((l) => l.includes(" --> "))
+    if (tsIdx === -1) continue
+    const timestamp = rows[tsIdx].split(" --> ")[0].trim().replace(/\.\d{3}$/, "")
+    const rawText = rows.slice(tsIdx + 1).join(" ").trim()
+    const speakerMatch = rawText.match(/^<v ([^>]+)>/)
+    const speaker = speakerMatch ? speakerMatch[1] : ""
+    const text = rawText.replace(/<v [^>]+>/g, "").replace(/<\/v>/g, "").replace(/<[^>]+>/g, "").trim()
+    if (text) lines.push({ timestamp, speaker, text })
+  }
+  return lines
+}
+
+// Derive a meeting date from the file name (looks for YYYY-MM-DD or YYYY_MM_DD pattern)
+function extractDateFromFilename(name: string): string {
+  const match = name.match(/(\d{4})[_-](\d{2})[_-](\d{2})/)
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`
+  return new Date().toISOString().split("T")[0]
+}
+
+export function TranscriptPanel({ projectName = "Unknown Project", userName = "User" }: TranscriptPanelProps) {
   const { token } = useAuth()
   const [mode, setMode] = useState<Mode>("idle")
   const [pendingFile, setPendingFile] = useState<PendingFile | null>(null)
@@ -61,9 +112,16 @@ export function TranscriptPanel() {
 
   // Transcript state
   const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([])
+  const [transcriptText, setTranscriptText] = useState<string>("")
   const [extractError, setExtractError] = useState<string | null>(null)
   const [apiLogs, setApiLogs] = useState<ApiLog[]>([])
   const transcriptRef = useRef<HTMLDivElement>(null)
+
+  // Webhook state
+  const [webhookUrl, setWebhookUrl] = useState("")
+  const [webhookPayload, setWebhookPayload] = useState<object | null>(null)
+  const [webhookLog, setWebhookLog] = useState<ApiLog | null>(null)
+  const [webhookSending, setWebhookSending] = useState(false)
 
   // Fetch recordings when entering meeting-search mode
   useEffect(() => {
@@ -104,60 +162,107 @@ export function TranscriptPanel() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setPendingFile({ name: file.name, sizeKB: Math.round(file.size / 1024) || 6 })
+    setPendingFile({ name: file.name, sizeKB: Math.round(file.size / 1024) || 1, rawFile: file })
     setMode("upload-confirm")
     e.target.value = ""
   }
 
   async function handleConfirm() {
-    // Local file upload — no transcript extraction
-    if (!pendingFile?.driveItemId) {
-      setMode("done")
-      setTranscriptLines([])
-      return
-    }
-
-    if (!pendingFile.driveId || !pendingFile.siteUrl) {
-      setExtractError("Missing driveId or siteUrl. Re-select the meeting from the dropdown.")
-      setMode("error")
-      return
-    }
+    if (!pendingFile) return
 
     setMode("extracting")
     setExtractError(null)
     setApiLogs([])
     setTranscriptLines([])
-
-    const { driveItemId, driveId, siteUrl } = pendingFile
+    setTranscriptText("")
+    setWebhookPayload(null)
+    setWebhookLog(null)
 
     try {
-      // Proxy through our server route so the Bearer token is sent server-side
-      // (browser cross-origin fetch with credentials:include is blocked by CORS wildcard)
-      const res = await fetch("/api/extract-transcript", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteUrl, driveId, itemId: driveItemId }),
-      })
+      let vttText = ""
+      let parsedLines: TranscriptLine[] = []
+      let plainText = ""
 
-      const data = await res.json() as {
-        lines?: TranscriptLine[]
-        logs?: ApiLog[]
-        error?: string
+      if (pendingFile.rawFile) {
+        // ── Local VTT upload ──────────────────────────────────────────────
+        vttText = await pendingFile.rawFile.text()
+        parsedLines = parseVTTToLines(vttText)
+        plainText = parseVTTToText(vttText)
+      } else if (pendingFile.driveItemId) {
+        // ── OneDrive meeting recording — proxy via server route ────────────
+        if (!pendingFile.driveId || !pendingFile.siteUrl) {
+          throw new Error("Missing driveId or siteUrl. Re-select the meeting.")
+        }
+
+        const res = await fetch("/api/extract-transcript", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            siteUrl: pendingFile.siteUrl,
+            driveId: pendingFile.driveId,
+            itemId: pendingFile.driveItemId,
+          }),
+        })
+
+        const data = await res.json() as { lines?: TranscriptLine[]; logs?: ApiLog[]; error?: string; plainText?: string }
+        if (data.logs) setApiLogs(data.logs)
+        if (!res.ok || data.error) throw new Error(data.error ?? `Server error HTTP ${res.status}`)
+
+        parsedLines = data.lines ?? []
+        plainText = data.plainText ?? parsedLines.map((l) => (l.speaker ? `${l.speaker}: ${l.text}` : l.text)).join("\n")
       }
 
-      if (data.logs) setApiLogs(data.logs)
-
-      if (!res.ok || data.error) {
-        throw new Error(data.error ?? `Server error HTTP ${res.status}`)
+      // Build webhook payload
+      const fileName = (pendingFile.originalName ?? pendingFile.name).replace(/\.[^/.]+$/, "")
+      const payload = {
+        user_name: userName,
+        project_name: projectName,
+        file_name: fileName,
+        meeting_date: extractDateFromFilename(fileName),
+        transcript: plainText,
       }
 
-      setTranscriptLines(data.lines ?? [])
+      setTranscriptLines(parsedLines)
+      setTranscriptText(plainText)
+      setWebhookPayload(payload)
       setMode("done")
 
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to extract transcript."
+      const msg = err instanceof Error ? err.message : "Failed to process transcript."
       setExtractError(msg)
       setMode("error")
+    }
+  }
+
+  async function handleSendWebhook() {
+    if (!webhookUrl.trim() || !webhookPayload) return
+    setWebhookSending(true)
+    setWebhookLog(null)
+
+    try {
+      const res = await fetch(webhookUrl.trim(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(webhookPayload),
+      })
+      const resText = await res.text()
+      setWebhookLog({
+        step: 3,
+        label: "n8n Webhook",
+        url: webhookUrl.trim(),
+        status: res.status,
+        responsePreview: resText,
+      })
+    } catch (err: unknown) {
+      setWebhookLog({
+        step: 3,
+        label: "n8n Webhook",
+        url: webhookUrl.trim(),
+        status: 0,
+        responsePreview: err instanceof Error ? err.message : "Network error",
+      })
+    } finally {
+      setWebhookSending(false)
     }
   }
 
@@ -168,8 +273,11 @@ export function TranscriptPanel() {
     setRecordingsError(null)
     setDropdownOpen(false)
     setTranscriptLines([])
+    setTranscriptText("")
     setExtractError(null)
     setApiLogs([])
+    setWebhookPayload(null)
+    setWebhookLog(null)
     setMode("idle")
   }
 
@@ -419,7 +527,7 @@ export function TranscriptPanel() {
           ) : (
             <div
               ref={transcriptRef}
-              className="flex flex-col gap-3 max-h-96 overflow-y-auto pr-1"
+              className="flex flex-col gap-3 max-h-64 overflow-y-auto pr-1"
               aria-label="Extracted transcript"
             >
               {transcriptLines.map((line, idx) => (
@@ -439,6 +547,62 @@ export function TranscriptPanel() {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Webhook section */}
+          {webhookPayload && (
+            <div className="flex flex-col gap-3 pt-2 border-t border-border">
+              <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase font-sans">
+                Send to n8n
+              </p>
+
+              {/* Payload preview */}
+              <details className="rounded-lg border border-border overflow-hidden text-xs font-mono">
+                <summary className="cursor-pointer px-3 py-2 bg-secondary text-muted-foreground hover:text-foreground select-none font-sans">
+                  Payload preview
+                </summary>
+                <pre className="px-3 py-3 overflow-x-auto whitespace-pre-wrap text-muted-foreground leading-relaxed bg-card max-h-48 overflow-y-auto">
+                  {JSON.stringify(webhookPayload, null, 2)}
+                </pre>
+              </details>
+
+              {/* Webhook URL input */}
+              <div className="flex flex-col gap-2">
+                <Input
+                  className="h-9 text-sm font-sans"
+                  placeholder="https://your-n8n.cloud/webhook/..."
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                />
+                <Button
+                  onClick={handleSendWebhook}
+                  disabled={!webhookUrl.trim() || webhookSending}
+                  className="w-full rounded-lg font-sans font-medium flex items-center gap-2"
+                  style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+                >
+                  {webhookSending ? (
+                    <><Loader2 size={15} className="animate-spin" /> Sending...</>
+                  ) : (
+                    <><Send size={15} /> Send to Webhook</>
+                  )}
+                </Button>
+              </div>
+
+              {/* Webhook response */}
+              {webhookLog && (
+                <div className="rounded-lg border border-border overflow-hidden text-xs font-mono">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-secondary">
+                    <span className={`font-bold px-1.5 py-0.5 rounded text-white ${webhookLog.status >= 200 && webhookLog.status < 300 ? "bg-green-600" : "bg-red-500"}`}>
+                      {webhookLog.status || "ERR"}
+                    </span>
+                    <span className="font-sans font-semibold text-foreground">{webhookLog.label}</span>
+                  </div>
+                  <pre className="px-3 py-3 overflow-x-auto whitespace-pre-wrap text-muted-foreground leading-relaxed max-h-32 overflow-y-auto">
+                    {webhookLog.responsePreview}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
         </div>
