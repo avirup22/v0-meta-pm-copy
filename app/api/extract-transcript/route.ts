@@ -128,10 +128,14 @@ export async function POST(req: NextRequest) {
       siteUrl = ""
     }
 
-    console.log("[v0] extract-transcript: resolved spDriveId:", spDriveId)
-    console.log("[v0] extract-transcript: resolved siteUrl:", siteUrl)
+  console.log("=".repeat(80))
+  console.log("[v0] STEP 0 RESOLVED VALUES:")
+  console.log("[v0]   spDriveId  :", spDriveId)
+  console.log("[v0]   siteUrl    :", siteUrl)
+  console.log("[v0]   itemWebUrl :", itemWebUrl)
+  console.log("=".repeat(80))
 
-    if (!spDriveId || !siteUrl) {
+  if (!spDriveId || !siteUrl) {
       console.error("[v0] extract-transcript: could not resolve spDriveId or siteUrl")
       return NextResponse.json(
         { error: `Could not resolve SharePoint context. driveId=${spDriveId} siteUrl=${siteUrl}` },
@@ -144,10 +148,16 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Step 1: List transcripts via SharePoint /_api/v2.1/ ───────────────────
-  // Exact URL pattern from browser network tab:
-  // {siteUrl}/_api/v2.1/drives/{spDriveId}/items/{itemId}/media/transcripts
+  // The driveId must be the SharePoint base64 format (b!...) from parentReference.driveId
+  // The itemId is the Graph drive item ID (01HIVVPJ...) — accepted by /_api/v2.1/
+  // Reference URL from browser: {siteUrl}/_api/v2.1/drives/{spDriveId}/items/{itemId}/media/transcripts
   const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${spDriveId}/items/${itemId}/media/transcripts`
-  console.log("[v0] extract-transcript: Step 1 – listing transcripts →", transcriptsUrl)
+  console.log("=".repeat(80))
+  console.log("[v0] STEP 1 REQUEST >>>")
+  console.log("[v0]   METHOD: GET")
+  console.log("[v0]   URL:", transcriptsUrl)
+  console.log("[v0]   HEADERS: Authorization: Bearer <token truncated>, Accept: application/json")
+  console.log("=".repeat(80))
 
   let transcriptsData: { value: SharePointTranscript[] }
 
@@ -159,14 +169,18 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    console.log("[v0] extract-transcript: transcripts list HTTP status:", transcriptsRes.status)
+    console.log("=".repeat(80))
+    console.log("[v0] STEP 1 RESPONSE <<<")
+    console.log("[v0]   STATUS:", transcriptsRes.status, transcriptsRes.statusText)
+    console.log("[v0]   HEADERS:", Object.fromEntries(transcriptsRes.headers.entries()))
     const rawBody = await transcriptsRes.text()
-    console.log("[v0] extract-transcript: transcripts raw response (first 500):", rawBody.slice(0, 500))
+    console.log("[v0]   BODY:", rawBody.slice(0, 1000))
+    console.log("=".repeat(80))
 
     if (!transcriptsRes.ok) {
-      console.error("[v0] extract-transcript: transcripts list error:", rawBody.slice(0, 300))
+      console.error("[v0] extract-transcript: STEP 1 FAILED – non-OK status", transcriptsRes.status)
       return NextResponse.json(
-        { error: `Failed to list transcripts (HTTP ${transcriptsRes.status}): ${rawBody.slice(0, 200)}` },
+        { error: `Failed to list transcripts (HTTP ${transcriptsRes.status}): ${rawBody.slice(0, 300)}` },
         { status: transcriptsRes.status }
       )
     }
@@ -181,9 +195,9 @@ export async function POST(req: NextRequest) {
         languageTag: t.languageTag,
         hasTemporaryDownloadUrl: !!t.temporaryDownloadUrl,
       }))
-    ))
+    , null, 2))
   } catch (err) {
-    console.error("[v0] extract-transcript: network error listing transcripts:", err)
+    console.error("[v0] extract-transcript: STEP 1 network error:", err)
     return NextResponse.json({ error: "Network error contacting SharePoint for transcript list." }, { status: 502 })
   }
 
@@ -204,14 +218,19 @@ export async function POST(req: NextRequest) {
   let vttText: string
 
   if (transcript.temporaryDownloadUrl) {
-    // temporaryDownloadUrl is pre-signed — no Authorization header needed
     const dlUrl = transcript.temporaryDownloadUrl
-    console.log("[v0] extract-transcript: Step 2 – using temporaryDownloadUrl (pre-signed), length:", dlUrl.length)
+    console.log("=".repeat(80))
+    console.log("[v0] STEP 2 REQUEST >>> (temporaryDownloadUrl — no auth header needed)")
+    console.log("[v0]   METHOD: GET")
+    console.log("[v0]   URL:", dlUrl.slice(0, 200), "...")
+    console.log("=".repeat(80))
 
     try {
       const dlRes = await fetch(dlUrl)
-      console.log("[v0] extract-transcript: temporaryDownloadUrl HTTP status:", dlRes.status)
-      console.log("[v0] extract-transcript: content-type:", dlRes.headers.get("content-type"))
+      console.log("=".repeat(80))
+      console.log("[v0] STEP 2 RESPONSE <<<")
+      console.log("[v0]   STATUS:", dlRes.status, dlRes.statusText)
+      console.log("[v0]   content-type:", dlRes.headers.get("content-type"))
 
       if (!dlRes.ok) {
         const errText = await dlRes.text().catch(() => "")
@@ -223,7 +242,9 @@ export async function POST(req: NextRequest) {
       }
 
       vttText = await dlRes.text()
-      console.log("[v0] extract-transcript: VTT downloaded, length:", vttText.length)
+      console.log("[v0]   VTT content length:", vttText.length, "chars")
+      console.log("[v0]   VTT preview:", vttText.slice(0, 300))
+      console.log("=".repeat(80))
     } catch (err) {
       console.error("[v0] extract-transcript: error downloading via temporaryDownloadUrl:", err)
       return NextResponse.json({ error: "Network error downloading transcript." }, { status: 502 })
