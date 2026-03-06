@@ -17,7 +17,6 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import {
   fetchRecordingFiles,
-  fetchTranscriptForRecording,
   type DriveItem,
   type TranscriptLine,
 } from "@/lib/graph"
@@ -96,7 +95,7 @@ export function TranscriptPanel() {
 
   async function handleConfirm() {
     if (!pendingFile?.driveItemId || !token) {
-      // Local file upload — no extraction possible yet
+      // Local file upload — no server-side extraction available
       setMode("done")
       setTranscriptLines([])
       return
@@ -107,12 +106,25 @@ export function TranscriptPanel() {
     setTranscriptLines([])
 
     try {
-      const lines = await fetchTranscriptForRecording(
-        token,
-        pendingFile.driveItemId,
-        pendingFile.originalName ?? pendingFile.name
-      )
-      setTranscriptLines(lines)
+      console.log("[v0] TranscriptPanel: calling /api/extract-transcript for item", pendingFile.driveItemId)
+      const res = await fetch("/api/extract-transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: pendingFile.driveItemId, token }),
+      })
+
+      console.log("[v0] TranscriptPanel: API response status:", res.status)
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        const msg = data.error ?? `Server error: HTTP ${res.status}`
+        console.error("[v0] TranscriptPanel: extraction error:", msg)
+        if (data.ffmpegLog) console.log("[v0] ffmpeg log:", data.ffmpegLog)
+        throw new Error(msg)
+      }
+
+      console.log("[v0] TranscriptPanel: received", data.lines?.length, "transcript lines")
+      setTranscriptLines(data.lines ?? [])
       setMode("done")
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to extract transcript."
