@@ -185,8 +185,8 @@ function extractDateFromFilename(name: string): string {
   return new Date().toISOString().split("T")[0]
 }
 
-const WEBHOOK_TRANSCRIPT = "https://indegene-sbx.app.n8n.cloud/webhook-test/meta-pm"
-const WEBHOOK_GET_MOM    = "https://indegene-sbx.app.n8n.cloud/webhook-test/get-mom"
+const WEBHOOK_TRANSCRIPT = "https://indegene-sbx.app.n8n.cloud/webhook/meta-pm"
+const WEBHOOK_GET_MOM    = "https://indegene-sbx.app.n8n.cloud/webhook/get-mom"
 
 export function TranscriptPanel({ projectName = "Unknown Project", userName = "User" }: TranscriptPanelProps) {
   const { token } = useAuth()
@@ -218,6 +218,7 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
   const [momLog, setMomLog] = useState<ApiLog | null>(null)
   const [momHtml, setMomHtml] = useState<string | null>(null)
   const [momSending, setMomSending] = useState(false)
+  const [momModalOpen, setMomModalOpen] = useState(false)
   const [fileName, setFileName] = useState<string>("")
 
   // Fetch recordings when entering meeting-search mode
@@ -431,6 +432,7 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
     setWebhookLog(null)
     setMomLog(null)
     setMomHtml(null)
+    setMomModalOpen(false)
     setFileName("")
     setMode("idle")
   }
@@ -765,41 +767,76 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
                 </div>
               )}
 
-              {/* MOM response */}
+              {/* MOM status badge — click to open modal */}
               {momLog && (
-                <div className="rounded-lg border border-border overflow-hidden">
-                  {/* Header */}
-                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-secondary">
-                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded text-white font-mono ${momLog.status >= 200 && momLog.status < 300 ? "bg-green-600" : "bg-red-500"}`}>
-                      {momLog.status || "ERR"}
-                    </span>
-                    <span className="text-xs font-sans font-semibold text-foreground">{momLog.label}</span>
-                  </div>
-
-                  {/* Rendered HTML */}
-                  {momHtml ? (
-                    <div
-                      className="px-5 py-4 overflow-y-auto max-h-[600px] bg-card font-sans text-sm text-foreground leading-relaxed
-                        [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:text-foreground
-                        [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1 [&_h3]:text-foreground
-                        [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ul]:space-y-1
-                        [&_li]:text-muted-foreground
-                        [&_strong]:text-foreground [&_strong]:font-semibold
-                        [&_table]:w-full [&_table]:border-collapse [&_table]:my-3 [&_table]:text-sm
-                        [&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-2 [&_th]:bg-secondary [&_th]:text-foreground [&_th]:font-semibold [&_th]:text-left
-                        [&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-2 [&_td]:text-muted-foreground
-                        [&_p]:my-2"
-                      dangerouslySetInnerHTML={{ __html: momHtml }}
-                    />
-                  ) : (
-                    <pre className="px-3 py-3 text-xs font-mono whitespace-pre-wrap text-muted-foreground max-h-32 overflow-y-auto">
-                      {momLog.responsePreview}
-                    </pre>
-                  )}
-                </div>
+                <button
+                  onClick={() => setMomModalOpen(true)}
+                  className="flex items-center gap-2 w-full rounded-lg border border-border px-3 py-2 bg-secondary hover:bg-secondary/80 transition-colors text-left"
+                >
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded text-white font-mono ${momLog.status >= 200 && momLog.status < 300 ? "bg-green-600" : "bg-red-500"}`}>
+                    {momLog.status || "ERR"}
+                  </span>
+                  <span className="text-xs font-sans font-semibold text-foreground flex-1">{momLog.label}</span>
+                  <span className="text-xs text-muted-foreground font-sans">Click to view</span>
+                </button>
               )}
             </div>
           )}
+        </div>
+      )}
+      {/* MOM full-screen modal */}
+      {momModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-background"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Minutes of Meeting"
+        >
+          {/* Modal header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card shrink-0">
+            <div className="flex items-center gap-3">
+              <FileOutput size={18} className="text-primary" />
+              <span className="font-sans font-semibold text-foreground text-base">Minutes of Meeting</span>
+              {momLog && (
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded text-white font-mono ${momLog.status >= 200 && momLog.status < 300 ? "bg-green-600" : "bg-red-500"}`}>
+                  {momLog.status}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setMomModalOpen(false)}
+              className="rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Modal body */}
+          <div className="flex-1 overflow-y-auto px-8 py-6 max-w-4xl w-full mx-auto">
+            {momHtml ? (
+              <div
+                className="font-sans text-sm text-foreground leading-relaxed
+                  [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-4 [&_h1]:text-foreground
+                  [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-2 [&_h2]:text-foreground [&_h2]:border-b [&_h2]:border-border [&_h2]:pb-1
+                  [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-5 [&_h3]:mb-1 [&_h3]:text-foreground
+                  [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ul]:space-y-1
+                  [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2 [&_ol]:space-y-1
+                  [&_li]:text-muted-foreground
+                  [&_strong]:text-foreground [&_strong]:font-semibold
+                  [&_p]:my-2 [&_p]:text-muted-foreground
+                  [&_table]:w-full [&_table]:border-collapse [&_table]:my-4 [&_table]:text-sm
+                  [&_th]:border [&_th]:border-border [&_th]:px-4 [&_th]:py-2 [&_th]:bg-secondary [&_th]:text-foreground [&_th]:font-semibold [&_th]:text-left
+                  [&_td]:border [&_td]:border-border [&_td]:px-4 [&_td]:py-2 [&_td]:text-muted-foreground
+                  [&_hr]:border-border [&_hr]:my-4"
+                dangerouslySetInnerHTML={{ __html: momHtml }}
+              />
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">
+                {momLog?.responsePreview}
+              </pre>
+            )}
+          </div>
         </div>
       )}
     </aside>
