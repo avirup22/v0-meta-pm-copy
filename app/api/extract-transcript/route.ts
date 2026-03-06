@@ -55,20 +55,86 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const { itemId, driveId, siteUrl, token } = body
-  if (!itemId || !driveId || !siteUrl || !token) {
-    const missing = [!itemId && "itemId", !driveId && "driveId", !siteUrl && "siteUrl", !token && "token"].filter(Boolean)
+  const { itemId, token } = body
+  if (!itemId || !token) {
+    const missing = [!itemId && "itemId", !token && "token"].filter(Boolean)
     console.error("[v0] extract-transcript: missing fields:", missing)
     return NextResponse.json({ error: `Missing required fields: ${missing.join(", ")}` }, { status: 400 })
   }
 
   console.log("[v0] extract-transcript: itemId:", itemId)
-  console.log("[v0] extract-transcript: driveId:", driveId)
-  console.log("[v0] extract-transcript: siteUrl:", siteUrl)
+
+  // ── Step 0: Resolve the SharePoint driveId and siteUrl from Graph item metadata ──
+  // Graph item IDs (01HIVVPJ...) are different from SharePoint drive IDs (b!L69g...).
+  // We must fetch the item's parentReference to get the correct SharePoint-format driveId
+  // and the SharePoint site URL needed for the /_api/v2.1/ transcript endpoints.
+  const itemMetaUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}?$select=id,name,parentReference`
+  console.log("[v0] extract-transcript: Step 0 – fetching item metadata →", itemMetaUrl)
+
+  let spDriveId: string
+  let siteUrl: string
+
+  try {
+    const metaRes = await fetch(itemMetaUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    console.log("[v0] extract-transcript: item metadata HTTP status:", metaRes.status)
+    if (!metaRes.ok) {
+      const errBody = await metaRes.json().catch(() => ({}))
+      const msg = (errBody as { error?: { message?: string } })?.error?.message ?? `HTTP ${metaRes.status}`
+      console.error("[v0] extract-transcript: metadata error:", msg)
+      return NextResponse.json({ error: `Failed to get item metadata: ${msg}` }, { status: metaRes.status })
+    }
+    const meta = await metaRes.json() as {
+      id: string
+      name: string
+      parentReference: {
+        driveId: string
+        siteId?: string
+        siteUrl?: string
+        sharepointIds?: { siteUrl?: string }
+      }
+    }
+    console.log("[v0] extract-transcript: item name:", meta.name)
+    console.log("[v0] extract-transcript: parentReference:", JSON.stringify(meta.parentReference))
+
+    // parentReference.driveId is the SharePoint base64 drive ID (b!...) format
+    spDriveId = meta.parentReference.driveId
+    // siteUrl may come from parentReference.siteUrl or sharepointIds.siteUrl
+    const rawSiteUrl =
+      meta.parentReference.siteUrl ??
+      meta.parentReference.sharepointIds?.siteUrl
+
+    if (!spDriveId) {
+      console.error("[v0] extract-transcript: parentReference.driveId is missing")
+      return NextResponse.json({ error: "Could not resolve SharePoint driveId from item metadata." }, { status: 502 })
+    }
+
+    if (rawSiteUrl) {
+      // rawSiteUrl may be the full personal site URL like
+      // https://indegene123-my.sharepoint.com/personal/sarvesh_koyande_indegene_com
+      siteUrl = rawSiteUrl.replace(/\/$/, "")
+    } else {
+      // Fallback: derive from the drive's webUrl via Graph
+      const driveUrl = `https://graph.microsoft.com/v1.0/me/drive?$select=webUrl`
+      console.log("[v0] extract-transcript: siteUrl missing – fetching drive webUrl →", driveUrl)
+      const driveRes = await fetch(driveUrl, { headers: { Authorization: `Bearer ${token}` } })
+      const driveData = await driveRes.json() as { webUrl?: string }
+      siteUrl = (driveData.webUrl ?? "").replace(/\/Documents.*$/, "").replace(/\/$/, "")
+      console.log("[v0] extract-transcript: derived siteUrl from drive webUrl:", siteUrl)
+    }
+
+    console.log("[v0] extract-transcript: resolved spDriveId:", spDriveId)
+    console.log("[v0] extract-transcript: resolved siteUrl:", siteUrl)
+  } catch (err) {
+    console.error("[v0] extract-transcript: error fetching item metadata:", err)
+    return NextResponse.json({ error: "Network error fetching item metadata." }, { status: 502 })
+  }
 
   // ── Step 1: List transcripts via SharePoint /_api/v2.1/ ───────────────────
-  // Pattern from payload: {siteUrl}/_api/v2.1/drives/{driveId}/items/{itemId}/media/transcripts
-  const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${itemId}/media/transcripts`
+  // Pattern confirmed from browser network payload:
+  // {siteUrl}/_api/v2.1/drives/{spDriveId}/items/{itemId}/media/transcripts
+  const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${spDriveId}/items/${itemId}/media/transcripts`
   console.log("[v0] extract-transcript: Step 1 – listing transcripts →", transcriptsUrl)
 
   let transcriptsRes: Response
@@ -116,7 +182,7 @@ export async function POST(req: NextRequest) {
 
   // ── Step 2: Stream transcript VTT content ─────────────────────────────────
   // Pattern from payload: {siteUrl}/_api/v2.1/drives/{driveId}/items/{itemId}/media/transcripts/{transcriptId}/streamContent?is=1&applymediaedits=false
-  const streamUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${itemId}/media/transcripts/${transcript.id}/streamContent?is=1&applymediaedits=false`
+  const streamUrl = `${siteUrl}/_api/v2.1/drives/${spDriveId}/items/${itemId}/media/transcripts/${transcript.id}/streamContent?is=1&applymediaedits=false`
   console.log("[v0] extract-transcript: Step 2 – streaming transcript →", streamUrl)
 
   let streamRes: Response

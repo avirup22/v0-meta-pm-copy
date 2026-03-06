@@ -117,8 +117,6 @@ export function TranscriptPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           itemId: pendingFile.driveItemId,
-          driveId: pendingFile.driveId,
-          siteUrl: pendingFile.siteUrl,
           token,
         }),
       })
