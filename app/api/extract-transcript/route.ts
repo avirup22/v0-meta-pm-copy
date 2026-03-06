@@ -38,8 +38,12 @@ export async function POST(req: Request) {
 
   const logs: { step: number; label: string; url: string; status: number; responsePreview: string }[] = []
 
-  // ── CALL 1: List transcripts ─────────────────────────────────────────────
-  const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${itemId}/media/transcripts`
+  // ── CALL 1: List transcripts via Microsoft Graph ─────────────────────────
+  // The Graph Bearer token works with graph.microsoft.com only — not SharePoint /_api/v2.1/.
+  // Graph exposes the same transcript list at:
+  //   GET https://graph.microsoft.com/v1.0/drives/{driveId}/items/{itemId}/media/transcripts
+  // driveId here is the Graph drive ID (from GET /me/drive → .id)
+  const transcriptsUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/media/transcripts`
 
   console.log("=".repeat(60))
   console.log("[v0] CALL 1 →", transcriptsUrl)
@@ -105,7 +109,7 @@ export async function POST(req: Request) {
       responsePreview: vttText.slice(0, 600),
     })
   } else {
-    const streamUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${itemId}/media/transcripts/${transcript.id}/streamContent?is=1&applymediaedits=false`
+    const streamUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/media/transcripts/${transcript.id}/content`
     console.log("=".repeat(60))
     console.log("[v0] CALL 2 (streamContent) →", streamUrl)
     console.log("=".repeat(60))
