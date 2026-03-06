@@ -5,7 +5,6 @@ import { use } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { TranscriptPanel } from "@/components/transcript-panel"
-import { Header } from "@/components/header"
 import { ChevronRight, ArrowRight, Plus } from "lucide-react"
 
 function slugToTitle(slug: string) {
@@ -35,8 +34,6 @@ export default function ProjectPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-
       <main className="max-w-6xl mx-auto px-8 py-10 flex flex-col gap-8">
         {/* Back link */}
         <Link
