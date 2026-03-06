@@ -72,6 +72,52 @@ export async function listFolderChildren(
 }
 
 /**
+ * List all files (any type) inside the root-level "Recordings" folder.
+ * Strips the file extension from each name before returning.
+ */
+export async function fetchRecordingFiles(token: string): Promise<DriveItem[]> {
+  console.log("[v0] fetchRecordingFiles: starting")
+
+  // Step 1 – get the Recordings folder at drive root
+  const recordingsFolder = await getDriveItemByPath(token, "Recordings")
+  console.log("[v0] fetchRecordingFiles – Recordings folder id:", recordingsFolder.id)
+
+  // Step 2 – list all children (files and folders)
+  const url = `${GRAPH_BASE}/me/drive/items/${recordingsFolder.id}/children?$select=id,name,file,folder,webUrl&$top=200`
+  console.log("[v0] fetchRecordingFiles listing children →", url)
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  console.log("[v0] fetchRecordingFiles children status:", res.status)
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    const message = body?.error?.message ?? `HTTP ${res.status}`
+    console.error("[v0] fetchRecordingFiles error:", message)
+    throw new Error(message)
+  }
+
+  const data: { value: DriveItem[] } = await res.json()
+
+  // Keep all items (files); strip the extension from the display name
+  const files = data.value.map((item) => ({
+    ...item,
+    name: item.name.replace(/\.[^/.]+$/, ""),
+  }))
+
+  console.log(
+    "[v0] fetchRecordingFiles found",
+    files.length,
+    "files:",
+    files.map((f) => f.name)
+  )
+
+  return files
+}
+
+/**
  * Walk the full path MetaPM → Projects and return the folder items inside Projects.
  */
 export async function fetchProjectFolders(token: string): Promise<DriveItem[]> {
