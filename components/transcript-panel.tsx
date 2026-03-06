@@ -136,7 +136,7 @@ export function TranscriptPanel() {
       const res = await fetch("/api/extract-transcript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteUrl, driveId, itemId: driveItemId, token }),
+        body: JSON.stringify({ siteUrl, driveId, itemId: driveItemId }),
       })
 
       const data = await res.json() as {
