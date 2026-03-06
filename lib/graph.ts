@@ -83,47 +83,53 @@ export async function listFolderChildren(
 }
 
 /**
- * List all files (any type) inside the root-level "Recordings" folder.
+ * List all files (any type) inside Documents/Recordings.
+ * Teams stores recordings at: OneDrive root → Documents → Recordings
  * Strips the file extension from each name before returning.
  */
 export async function fetchRecordingFiles(token: string): Promise<DriveItem[]> {
-  console.log("[v0] fetchRecordingFiles: starting")
+  console.log("[v0] fetchRecordingFiles: starting – looking for Documents/Recordings")
 
-  // Step 1 – get the Recordings folder at drive root
-  const recordingsFolder = await getDriveItemByPath(token, "Recordings")
-  console.log("[v0] fetchRecordingFiles – Recordings folder id:", recordingsFolder.id)
+  // Step 1 – resolve Documents/Recordings by path
+  // The SharePoint Stream URL confirms the path is /Documents/Recordings/...
+  const recordingsFolder = await getDriveItemByPath(token, "Documents/Recordings")
+  console.log("[v0] fetchRecordingFiles – Recordings folder id:", recordingsFolder.id, "name:", recordingsFolder.name)
 
-  // Step 2 – list all children (files and folders)
-  const url = `${GRAPH_BASE}/me/drive/items/${recordingsFolder.id}/children?$select=id,name,file,folder,webUrl&$top=200`
+  // Step 2 – list all children (files and sub-folders)
+  const url = `${GRAPH_BASE}/me/drive/items/${recordingsFolder.id}/children?$select=id,name,file,folder,size,webUrl&$top=200&$orderby=name`
   console.log("[v0] fetchRecordingFiles listing children →", url)
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
-  console.log("[v0] fetchRecordingFiles children status:", res.status)
+  console.log("[v0] fetchRecordingFiles children HTTP status:", res.status)
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const message = body?.error?.message ?? `HTTP ${res.status}`
-    console.error("[v0] fetchRecordingFiles error:", message)
+    console.error("[v0] fetchRecordingFiles error body:", message)
     throw new Error(message)
   }
 
-  const data: { value: DriveItem[] } = await res.json()
+  const data: { value: (DriveItem & { size?: number })[] } = await res.json()
+  console.log("[v0] fetchRecordingFiles raw item count:", data.value.length)
+  console.log("[v0] fetchRecordingFiles raw names:", data.value.map((i) => i.name))
 
-  // Keep all items; strip the extension from display name, but preserve originalName for VTT matching
-  const files = data.value.map((item) => ({
-    ...item,
-    originalName: item.name,
-    name: item.name.replace(/\.[^/.]+$/, ""),
-  }))
+  // Keep only files (not sub-folders); preserve originalName, strip extension for display
+  const files = data.value
+    .filter((item) => item.file !== undefined)
+    .map((item) => ({
+      ...item,
+      originalName: item.name,
+      name: item.name.replace(/\.[^/.]+$/, ""),
+    }))
 
   console.log(
-    "[v0] fetchRecordingFiles found",
+    "[v0] fetchRecordingFiles final file list (",
     files.length,
-    "files:",
-    files.map((f) => f.name)
+    "):",
+    files.map((f) => `${f.name} [id:${f.id}]`)
   )
 
   return files

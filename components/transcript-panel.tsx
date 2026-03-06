@@ -93,20 +93,24 @@ export function TranscriptPanel() {
     e.target.value = ""
   }
 
+  const [ffmpegLog, setFfmpegLog] = useState<string | null>(null)
+
   async function handleConfirm() {
     if (!pendingFile?.driveItemId || !token) {
-      // Local file upload — no server-side extraction available
+      console.log("[v0] TranscriptPanel: no driveItemId — treating as local upload, skipping extraction")
       setMode("done")
       setTranscriptLines([])
       return
     }
 
+    console.log("[v0] TranscriptPanel: confirm clicked for item:", pendingFile.driveItemId, "name:", pendingFile.name)
     setMode("extracting")
     setExtractError(null)
+    setFfmpegLog(null)
     setTranscriptLines([])
 
     try {
-      console.log("[v0] TranscriptPanel: calling /api/extract-transcript for item", pendingFile.driveItemId)
+      console.log("[v0] TranscriptPanel: POSTing to /api/extract-transcript")
       const res = await fetch("/api/extract-transcript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -114,20 +118,30 @@ export function TranscriptPanel() {
       })
 
       console.log("[v0] TranscriptPanel: API response status:", res.status)
-      const data = await res.json()
+      const data = await res.json() as { lines?: TranscriptLine[]; error?: string; ffmpegLog?: string; rawVtt?: string }
+      console.log("[v0] TranscriptPanel: response keys:", Object.keys(data))
+
+      if (data.ffmpegLog) {
+        console.log("[v0] TranscriptPanel: ffmpeg log from server:\n", data.ffmpegLog)
+        setFfmpegLog(data.ffmpegLog)
+      }
 
       if (!res.ok || data.error) {
         const msg = data.error ?? `Server error: HTTP ${res.status}`
-        console.error("[v0] TranscriptPanel: extraction error:", msg)
-        if (data.ffmpegLog) console.log("[v0] ffmpeg log:", data.ffmpegLog)
+        console.error("[v0] TranscriptPanel: extraction failed:", msg)
         throw new Error(msg)
       }
 
-      console.log("[v0] TranscriptPanel: received", data.lines?.length, "transcript lines")
+      if (data.rawVtt) {
+        console.log("[v0] TranscriptPanel: raw VTT preview:\n", data.rawVtt.slice(0, 400))
+      }
+
+      console.log("[v0] TranscriptPanel: transcript lines received:", data.lines?.length ?? 0)
       setTranscriptLines(data.lines ?? [])
       setMode("done")
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to extract transcript."
+      console.error("[v0] TranscriptPanel: caught error:", msg)
       setExtractError(msg)
       setMode("error")
     }
@@ -320,11 +334,21 @@ export function TranscriptPanel() {
 
       {/* ERROR */}
       {mode === "error" && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-lg p-3">
             <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
             <p className="text-sm text-red-600 font-sans">{extractError}</p>
           </div>
+          {ffmpegLog && (
+            <details className="text-xs font-mono">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none py-1">
+                Show ffmpeg log
+              </summary>
+              <pre className="mt-2 p-3 bg-secondary rounded-lg overflow-x-auto overflow-y-auto max-h-48 whitespace-pre-wrap text-muted-foreground leading-relaxed">
+                {ffmpegLog}
+              </pre>
+            </details>
+          )}
           <button
             onClick={handleCancel}
             className="text-xs text-muted-foreground hover:text-primary font-sans transition-colors text-left"
