@@ -69,44 +69,88 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Step 1: Get the OneDrive download URL via Graph API ──────────────────────
-  const metaUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}?$select=id,name,size,@microsoft.graph.downloadUrl`
-  console.log("[v0] extract-transcript: fetching item metadata →", metaUrl)
+  // NOTE: @microsoft.graph.downloadUrl is NOT returned when $select is used.
+  // We must fetch the full item (no $select) to get it, OR use the /content
+  // endpoint which returns a 302 redirect to the CDN download URL.
+  // We use /content with redirect:manual to capture the Location header.
+  const contentUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/content`
+  console.log("[v0] extract-transcript: resolving download URL via /content →", contentUrl)
 
-  let metaRes: Response
+  let downloadUrl: string | undefined
+
+  // Primary: follow the redirect from /content
   try {
-    metaRes = await fetch(metaUrl, {
+    const redirectRes = await fetch(contentUrl, {
       headers: { Authorization: `Bearer ${token}` },
+      redirect: "manual",
     })
+    console.log("[v0] extract-transcript: /content response status:", redirectRes.status)
+    console.log("[v0] extract-transcript: /content response headers:", Object.fromEntries(redirectRes.headers.entries()))
+
+    if (redirectRes.status === 302 || redirectRes.status === 301) {
+      downloadUrl = redirectRes.headers.get("location") ?? undefined
+      console.log("[v0] extract-transcript: redirect location obtained, length:", downloadUrl?.length)
+    } else if (redirectRes.status === 200) {
+      // Some Graph versions return the file directly on 200
+      // In this case we stream directly from this response — handled below
+      console.log("[v0] extract-transcript: /content returned 200 directly (no redirect)")
+      downloadUrl = contentUrl  // sentinel — we'll re-fetch with auth below
+    } else {
+      const errBody = await redirectRes.json().catch(() => ({}))
+      const msg = (errBody as { error?: { message?: string } })?.error?.message ?? `HTTP ${redirectRes.status}`
+      console.error("[v0] extract-transcript: /content error:", msg)
+      return NextResponse.json({ error: `Graph API /content error: ${msg}` }, { status: redirectRes.status })
+    }
   } catch (fetchErr) {
-    console.error("[v0] extract-transcript: network error fetching metadata:", fetchErr)
+    console.error("[v0] extract-transcript: network error on /content request:", fetchErr)
     return NextResponse.json({ error: "Network error contacting Graph API." }, { status: 502 })
   }
 
-  console.log("[v0] extract-transcript: metadata HTTP status:", metaRes.status)
-
-  if (!metaRes.ok) {
-    const errBody = await metaRes.json().catch(() => ({}))
-    const msg = (errBody as { error?: { message?: string } })?.error?.message ?? `HTTP ${metaRes.status}`
-    console.error("[v0] extract-transcript: Graph API error:", msg)
-    return NextResponse.json({ error: msg }, { status: metaRes.status })
-  }
-
-  const meta = await metaRes.json() as { id: string; name: string; size: number; "@microsoft.graph.downloadUrl"?: string }
-  console.log("[v0] extract-transcript: item name:", meta.name, "| size (bytes):", meta.size)
-
-  const downloadUrl: string | undefined = meta["@microsoft.graph.downloadUrl"]
+  // Fallback: fetch full item metadata (no $select) to get @microsoft.graph.downloadUrl
   if (!downloadUrl) {
-    console.error("[v0] extract-transcript: @microsoft.graph.downloadUrl missing from Graph response")
-    return NextResponse.json({ error: "No download URL returned by Graph API." }, { status: 502 })
+    console.log("[v0] extract-transcript: no redirect URL — falling back to full item metadata fetch")
+    const metaUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}`
+    console.log("[v0] extract-transcript: full metadata →", metaUrl)
+    try {
+      const metaRes = await fetch(metaUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      console.log("[v0] extract-transcript: metadata HTTP status:", metaRes.status)
+      if (metaRes.ok) {
+        const meta = await metaRes.json() as { id: string; name: string; size?: number; "@microsoft.graph.downloadUrl"?: string }
+        console.log("[v0] extract-transcript: item name:", meta.name, "| size:", meta.size)
+        console.log("[v0] extract-transcript: downloadUrl present:", !!meta["@microsoft.graph.downloadUrl"])
+        downloadUrl = meta["@microsoft.graph.downloadUrl"]
+      } else {
+        const errBody = await metaRes.json().catch(() => ({}))
+        const msg = (errBody as { error?: { message?: string } })?.error?.message ?? `HTTP ${metaRes.status}`
+        console.error("[v0] extract-transcript: metadata fallback error:", msg)
+        return NextResponse.json({ error: msg }, { status: metaRes.status })
+      }
+    } catch (fallbackErr) {
+      console.error("[v0] extract-transcript: fallback metadata fetch error:", fallbackErr)
+      return NextResponse.json({ error: "Failed to get download URL." }, { status: 502 })
+    }
   }
-  console.log("[v0] extract-transcript: download URL obtained (length:", downloadUrl.length, "chars)")
+
+  if (!downloadUrl) {
+    console.error("[v0] extract-transcript: all strategies exhausted — no download URL available")
+    return NextResponse.json({ error: "No download URL returned by Graph API. Ensure the token has Files.Read scope." }, { status: 502 })
+  }
+  console.log("[v0] extract-transcript: download URL resolved successfully")
 
   // ── Step 2: Stream the MP4 from OneDrive ─────────────────────────────────────
-  console.log("[v0] extract-transcript: initiating MP4 stream from OneDrive")
+  // If downloadUrl is the sentinel (the /content URL itself), we need to include
+  // the auth header so Graph can serve the file. For real CDN URLs no auth needed.
+  const isGraphUrl = downloadUrl.startsWith("https://graph.microsoft.com")
+  console.log("[v0] extract-transcript: initiating MP4 stream from OneDrive — isGraphUrl:", isGraphUrl)
 
   let videoRes: Response
   try {
-    videoRes = await fetch(downloadUrl)
+    videoRes = await fetch(downloadUrl, isGraphUrl
+      ? { headers: { Authorization: `Bearer ${token}` } }
+      : {}
+    )
   } catch (streamErr) {
     console.error("[v0] extract-transcript: network error opening video stream:", streamErr)
     return NextResponse.json({ error: "Network error streaming video from OneDrive." }, { status: 502 })
