@@ -216,6 +216,7 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
 
   // MOM state
   const [momLog, setMomLog] = useState<ApiLog | null>(null)
+  const [momHtml, setMomHtml] = useState<string | null>(null)
   const [momSending, setMomSending] = useState(false)
   const [fileName, setFileName] = useState<string>("")
 
@@ -367,6 +368,7 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
     if (!fileName) return
     setMomSending(true)
     setMomLog(null)
+    setMomHtml(null)
 
     try {
       const res = await fetch(WEBHOOK_GET_MOM, {
@@ -375,12 +377,32 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
         body: JSON.stringify({ file_name: fileName }),
       })
       const resText = await res.text()
+
+      // The webhook returns JSON: { "output": "<html>...</html>" }
+      // Try to parse and extract the HTML from the output field
+      let htmlContent: string | null = null
+      try {
+        const parsed = JSON.parse(resText)
+        if (parsed?.output && typeof parsed.output === "string") {
+          // Strip markdown code fences if present (```html ... ```)
+          htmlContent = parsed.output
+            .replace(/^```html\s*/i, "")
+            .replace(/^```\s*/i, "")
+            .replace(/\s*```$/, "")
+            .trim()
+        }
+      } catch {
+        // Not JSON — maybe raw HTML
+        if (resText.trim().startsWith("<")) htmlContent = resText
+      }
+
+      setMomHtml(htmlContent)
       setMomLog({
         step: 4,
         label: "Generate MOM",
         url: WEBHOOK_GET_MOM,
         status: res.status,
-        responsePreview: resText,
+        responsePreview: resText.slice(0, 200),
       })
     } catch (err: unknown) {
       setMomLog({
@@ -408,6 +430,7 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
     setWebhookPayload(null)
     setWebhookLog(null)
     setMomLog(null)
+    setMomHtml(null)
     setFileName("")
     setMode("idle")
   }
@@ -744,16 +767,35 @@ export function TranscriptPanel({ projectName = "Unknown Project", userName = "U
 
               {/* MOM response */}
               {momLog && (
-                <div className="rounded-lg border border-border overflow-hidden text-xs font-mono">
+                <div className="rounded-lg border border-border overflow-hidden">
+                  {/* Header */}
                   <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-secondary">
-                    <span className={`font-bold px-1.5 py-0.5 rounded text-white ${momLog.status >= 200 && momLog.status < 300 ? "bg-green-600" : "bg-red-500"}`}>
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded text-white font-mono ${momLog.status >= 200 && momLog.status < 300 ? "bg-green-600" : "bg-red-500"}`}>
                       {momLog.status || "ERR"}
                     </span>
-                    <span className="font-sans font-semibold text-foreground">{momLog.label}</span>
+                    <span className="text-xs font-sans font-semibold text-foreground">{momLog.label}</span>
                   </div>
-                  <pre className="px-3 py-3 overflow-x-auto whitespace-pre-wrap text-muted-foreground leading-relaxed max-h-48 overflow-y-auto">
-                    {momLog.responsePreview}
-                  </pre>
+
+                  {/* Rendered HTML */}
+                  {momHtml ? (
+                    <div
+                      className="px-5 py-4 overflow-y-auto max-h-[600px] bg-card font-sans text-sm text-foreground leading-relaxed
+                        [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:text-foreground
+                        [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1 [&_h3]:text-foreground
+                        [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ul]:space-y-1
+                        [&_li]:text-muted-foreground
+                        [&_strong]:text-foreground [&_strong]:font-semibold
+                        [&_table]:w-full [&_table]:border-collapse [&_table]:my-3 [&_table]:text-sm
+                        [&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-2 [&_th]:bg-secondary [&_th]:text-foreground [&_th]:font-semibold [&_th]:text-left
+                        [&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-2 [&_td]:text-muted-foreground
+                        [&_p]:my-2"
+                      dangerouslySetInnerHTML={{ __html: momHtml }}
+                    />
+                  ) : (
+                    <pre className="px-3 py-3 text-xs font-mono whitespace-pre-wrap text-muted-foreground max-h-32 overflow-y-auto">
+                      {momLog.responsePreview}
+                    </pre>
+                  )}
                 </div>
               )}
             </div>
