@@ -10,6 +10,16 @@ export interface DriveItem {
   webUrl?: string
   /** Download URL for the file content */
   "@microsoft.graph.downloadUrl"?: string
+  /** The OneDrive/SharePoint drive ID — needed for SharePoint /_api/v2.1/ transcript calls */
+  driveId?: string
+  /** SharePoint site hostname e.g. https://indegene123-my.sharepoint.com/personal/sarvesh_koyande_indegene_com */
+  siteUrl?: string
+}
+
+export interface RecordingsResult {
+  files: DriveItem[]
+  driveId: string
+  siteUrl: string
 }
 
 /**
@@ -79,18 +89,37 @@ export async function listFolderChildren(
 }
 
 /**
- * List all files (any type) inside the root-level "Recordings" folder.
- * OneDrive drive root → Recordings → [mp4 files]
- * Strips the file extension from each name before returning.
+ * List all files inside the root-level "Recordings" folder.
+ * Also fetches the drive metadata to capture driveId and SharePoint siteUrl,
+ * which are required to call the SharePoint /_api/v2.1/ transcript endpoints.
  */
-export async function fetchRecordingFiles(token: string): Promise<DriveItem[]> {
+export async function fetchRecordingFiles(token: string): Promise<RecordingsResult> {
   console.log("[v0] fetchRecordingFiles: starting – looking for Recordings at drive root")
 
-  // Step 1 – resolve the Recordings folder directly at the drive root
+  // Step 1 – get current user's drive metadata (gives us driveId and webUrl/siteUrl)
+  const driveMetaUrl = `${GRAPH_BASE}/me/drive?$select=id,webUrl`
+  console.log("[v0] fetchRecordingFiles: fetching drive metadata →", driveMetaUrl)
+  const driveMetaRes = await fetch(driveMetaUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  console.log("[v0] fetchRecordingFiles: drive meta status:", driveMetaRes.status)
+  if (!driveMetaRes.ok) {
+    const body = await driveMetaRes.json().catch(() => ({}))
+    throw new Error(body?.error?.message ?? `HTTP ${driveMetaRes.status}`)
+  }
+  const driveMeta: { id: string; webUrl: string } = await driveMetaRes.json()
+  const driveId = driveMeta.id
+  // webUrl looks like: https://indegene123-my.sharepoint.com/personal/sarvesh_koyande_indegene_com/Documents
+  // We want just the site root up to the personal path segment
+  const siteUrl = driveMeta.webUrl.replace(/\/Documents.*$/, "")
+  console.log("[v0] fetchRecordingFiles: driveId:", driveId)
+  console.log("[v0] fetchRecordingFiles: siteUrl:", siteUrl)
+
+  // Step 2 – resolve the Recordings folder directly at the drive root
   const recordingsFolder = await getDriveItemByPath(token, "Recordings")
   console.log("[v0] fetchRecordingFiles – Recordings folder id:", recordingsFolder.id, "name:", recordingsFolder.name)
 
-  // Step 2 – list all children (files and sub-folders)
+  // Step 3 – list all children
   const url = `${GRAPH_BASE}/me/drive/items/${recordingsFolder.id}/children?$select=id,name,file,folder,size,webUrl&$top=200&$orderby=name`
   console.log("[v0] fetchRecordingFiles listing children →", url)
 
@@ -111,23 +140,25 @@ export async function fetchRecordingFiles(token: string): Promise<DriveItem[]> {
   console.log("[v0] fetchRecordingFiles raw item count:", data.value.length)
   console.log("[v0] fetchRecordingFiles raw names:", data.value.map((i) => i.name))
 
-  // Keep only files (not sub-folders); preserve originalName, strip extension for display
+  // Keep only files (not sub-folders); stamp driveId+siteUrl on each, strip extension
   const files = data.value
     .filter((item) => item.file !== undefined)
     .map((item) => ({
       ...item,
       originalName: item.name,
       name: item.name.replace(/\.[^/.]+$/, ""),
+      driveId,
+      siteUrl,
     }))
 
   console.log(
     "[v0] fetchRecordingFiles final file list (",
     files.length,
     "):",
-    files.map((f) => `${f.name} [id:${f.id}]`)
+    files.map((f) => `${f.name} [id:${f.id}] [driveId:${f.driveId}]`)
   )
 
-  return files
+  return { files, driveId, siteUrl }
 }
 
 /**

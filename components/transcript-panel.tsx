@@ -32,6 +32,8 @@ interface PendingFile {
   name: string
   sizeKB: number
   driveItemId?: string
+  driveId?: string
+  siteUrl?: string
   originalName?: string
 }
 
@@ -64,7 +66,7 @@ export function TranscriptPanel() {
     setRecordingsLoading(true)
     setRecordingsError(null)
     fetchRecordingFiles(token)
-      .then((files) => {
+      .then(({ files }) => {
         setRecordings(files)
         setDropdownOpen(true)
       })
@@ -113,7 +115,12 @@ export function TranscriptPanel() {
       const res = await fetch("/api/extract-transcript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: pendingFile.driveItemId, token }),
+        body: JSON.stringify({
+          itemId: pendingFile.driveItemId,
+          driveId: pendingFile.driveId,
+          siteUrl: pendingFile.siteUrl,
+          token,
+        }),
       })
 
       const data = await res.json() as { lines?: TranscriptLine[]; error?: string; rawVtt?: string }
@@ -147,6 +154,8 @@ export function TranscriptPanel() {
       name: item.name,
       sizeKB: 0,
       driveItemId: item.id,
+      driveId: item.driveId,
+      siteUrl: item.siteUrl,
       originalName: item.originalName ?? item.name,
     })
     setMode("upload-confirm")
