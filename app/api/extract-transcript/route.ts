@@ -1,303 +1,179 @@
 import { NextRequest, NextResponse } from "next/server"
 
+export interface ApiLog {
+  step: number
+  label: string
+  url: string
+  status: number
+  responsePreview: string
+}
+
 interface TranscriptLine {
   timestamp: string
   speaker: string
   text: string
 }
 
-interface SharePointTranscript {
-  id: string
-  displayName?: string
-  languageTag?: string
-  isDefault?: boolean
-  temporaryDownloadUrl?: string
-  source?: string
-}
-
-// ─── VTT parser ────────────────────────────────────────────────────────────────
 function parseVTT(vttContent: string): TranscriptLine[] {
   const lines: TranscriptLine[] = []
   const blocks = vttContent.split(/\n\n+/)
-  console.log("[v0] parseVTT: total cue blocks:", blocks.length)
-
   for (const block of blocks) {
     const blockLines = block.trim().split("\n")
     const tsIdx = blockLines.findIndex((l) => l.includes(" --> "))
     if (tsIdx === -1) continue
-
-    const startTime = blockLines[tsIdx].split(" --> ")[0].trim()
-    const timestamp = startTime.replace(/\.\d{3}$/, "")
-
+    const timestamp = blockLines[tsIdx].split(" --> ")[0].trim().replace(/\.\d{3}$/, "")
     const rawText = blockLines.slice(tsIdx + 1).join(" ").trim()
     const speakerMatch = rawText.match(/^<v ([^>]+)>/)
     const speaker = speakerMatch ? speakerMatch[1] : ""
-    const text = rawText
-      .replace(/<v [^>]+>/g, "")
-      .replace(/<\/v>/g, "")
-      .replace(/<[^>]+>/g, "")
-      .trim()
-
+    const text = rawText.replace(/<v [^>]+>/g, "").replace(/<\/v>/g, "").replace(/<[^>]+>/g, "").trim()
     if (text) lines.push({ timestamp, speaker, text })
   }
-
-  console.log("[v0] parseVTT: parsed lines:", lines.length)
   return lines
 }
 
-// ─── Route handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  console.log("[v0] extract-transcript: POST received")
-
-  let body: { itemId?: string; token?: string }
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+  const body = await req.json() as {
+    itemId: string
+    driveId: string
+    siteUrl: string
+    token: string
   }
 
-  const { itemId, token } = body
-  if (!itemId || !token) {
-    const missing = [!itemId && "itemId", !token && "token"].filter(Boolean)
-    console.error("[v0] extract-transcript: missing fields:", missing)
-    return NextResponse.json({ error: `Missing required fields: ${missing.join(", ")}` }, { status: 400 })
-  }
+  const { itemId, driveId, siteUrl, token } = body
 
-  console.log("[v0] extract-transcript: itemId:", itemId)
-
-  // ── Step 0: Fetch full item metadata from Graph (no $select — we need all fields) ──
-  // parentReference.driveId from Graph returns the SharePoint base64 drive ID (b!...) format.
-  // parentReference.sharepointIds.siteUrl gives the SharePoint site root.
-  const itemMetaUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}`
-  console.log("[v0] extract-transcript: Step 0 – fetching full item metadata →", itemMetaUrl)
-
-  let spDriveId: string
-  let siteUrl: string
-  let itemWebUrl: string
-
-  try {
-    const metaRes = await fetch(itemMetaUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    console.log("[v0] extract-transcript: item metadata HTTP status:", metaRes.status)
-
-    if (!metaRes.ok) {
-      const errBody = await metaRes.json().catch(() => ({}))
-      const msg = (errBody as { error?: { message?: string } })?.error?.message ?? `HTTP ${metaRes.status}`
-      console.error("[v0] extract-transcript: metadata error:", msg)
-      return NextResponse.json({ error: `Failed to get item metadata: ${msg}` }, { status: metaRes.status })
-    }
-
-    const meta = await metaRes.json() as {
-      id: string
-      name: string
-      webUrl?: string
-      parentReference: {
-        driveId?: string
-        siteId?: string
-        siteUrl?: string
-        sharepointIds?: {
-          siteUrl?: string
-          siteId?: string
-          webUrl?: string
-        }
-      }
-    }
-
-    console.log("[v0] extract-transcript: item name:", meta.name)
-    console.log("[v0] extract-transcript: item webUrl:", meta.webUrl)
-    console.log("[v0] extract-transcript: parentReference.driveId:", meta.parentReference?.driveId)
-    console.log("[v0] extract-transcript: parentReference.siteUrl:", meta.parentReference?.siteUrl)
-    console.log("[v0] extract-transcript: parentReference.sharepointIds:", JSON.stringify(meta.parentReference?.sharepointIds))
-
-    // driveId from parentReference is the SharePoint base64 b!... format
-    spDriveId = meta.parentReference?.driveId ?? ""
-    itemWebUrl = meta.webUrl ?? ""
-
-    // Derive siteUrl: strip from item's webUrl everything from /Documents onwards
-    // e.g. https://tenant-my.sharepoint.com/personal/user/Documents/Recordings/file.mp4
-    //   → https://tenant-my.sharepoint.com/personal/user
-    if (itemWebUrl) {
-      const docIdx = itemWebUrl.indexOf("/Documents")
-      siteUrl = docIdx !== -1 ? itemWebUrl.slice(0, docIdx) : itemWebUrl
-    } else if (meta.parentReference?.siteUrl) {
-      siteUrl = meta.parentReference.siteUrl.replace(/\/$/, "")
-    } else if (meta.parentReference?.sharepointIds?.siteUrl) {
-      siteUrl = meta.parentReference.sharepointIds.siteUrl.replace(/\/$/, "")
-    } else {
-      siteUrl = ""
-    }
-
-  console.log("=".repeat(80))
-  console.log("[v0] STEP 0 RESOLVED VALUES:")
-  console.log("[v0]   spDriveId  :", spDriveId)
-  console.log("[v0]   siteUrl    :", siteUrl)
-  console.log("[v0]   itemWebUrl :", itemWebUrl)
-  console.log("=".repeat(80))
-
-  if (!spDriveId || !siteUrl) {
-      console.error("[v0] extract-transcript: could not resolve spDriveId or siteUrl")
-      return NextResponse.json(
-        { error: `Could not resolve SharePoint context. driveId=${spDriveId} siteUrl=${siteUrl}` },
-        { status: 502 }
-      )
-    }
-  } catch (err) {
-    console.error("[v0] extract-transcript: error in Step 0:", err)
-    return NextResponse.json({ error: "Network error fetching item metadata." }, { status: 502 })
-  }
-
-  // ── Step 1: List transcripts ───────────────────────────────────────────────
-  // The SharePoint /_api/v2.1/ rejects Graph item IDs (01HIVVPJ...).
-  // Use the Graph native endpoint instead:
-  //   GET /me/drive/items/{itemId}/media/transcripts
-  // This is the same data the browser fetches via SharePoint, exposed through Graph.
-  const transcriptsUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/media/transcripts`
-  console.log("=".repeat(80))
-  console.log("[v0] STEP 1 REQUEST >>>")
-  console.log("[v0]   METHOD: GET")
-  console.log("[v0]   URL:", transcriptsUrl)
-  console.log("[v0]   HEADERS: Authorization: Bearer <token>, Accept: application/json")
-  console.log("=".repeat(80))
-
-  let transcriptsData: { value: SharePointTranscript[] }
-
-  try {
-    const transcriptsRes = await fetch(transcriptsUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    })
-
-    console.log("=".repeat(80))
-    console.log("[v0] STEP 1 RESPONSE <<<")
-    console.log("[v0]   STATUS:", transcriptsRes.status, transcriptsRes.statusText)
-    console.log("[v0]   HEADERS:", Object.fromEntries(transcriptsRes.headers.entries()))
-    const rawBody = await transcriptsRes.text()
-    console.log("[v0]   BODY:", rawBody.slice(0, 1000))
-    console.log("=".repeat(80))
-
-    if (!transcriptsRes.ok) {
-      console.error("[v0] extract-transcript: STEP 1 FAILED – non-OK status", transcriptsRes.status)
-      return NextResponse.json(
-        { error: `Failed to list transcripts (HTTP ${transcriptsRes.status}): ${rawBody.slice(0, 300)}` },
-        { status: transcriptsRes.status }
-      )
-    }
-
-    transcriptsData = JSON.parse(rawBody) as { value: SharePointTranscript[] }
-    console.log("[v0] extract-transcript: transcripts count:", transcriptsData.value?.length ?? 0)
-    console.log("[v0] extract-transcript: transcript entries:", JSON.stringify(
-      transcriptsData.value?.map((t) => ({
-        id: t.id,
-        displayName: t.displayName,
-        isDefault: t.isDefault,
-        languageTag: t.languageTag,
-        hasTemporaryDownloadUrl: !!t.temporaryDownloadUrl,
-      }))
-    , null, 2))
-  } catch (err) {
-    console.error("[v0] extract-transcript: STEP 1 network error:", err)
-    return NextResponse.json({ error: "Network error contacting SharePoint for transcript list." }, { status: 502 })
-  }
-
-  if (!transcriptsData.value || transcriptsData.value.length === 0) {
-    console.warn("[v0] extract-transcript: no transcripts available for this recording")
+  if (!itemId || !driveId || !siteUrl || !token) {
     return NextResponse.json(
-      { error: "No transcript found for this recording. Transcription may not have been enabled for this meeting." },
-      { status: 404 }
+      { error: `Missing fields. Got: itemId=${!!itemId} driveId=${!!driveId} siteUrl=${!!siteUrl} token=${!!token}` },
+      { status: 400 }
     )
   }
 
-  // Prefer the default transcript, else first one
-  const transcript = transcriptsData.value.find((t) => t.isDefault) ?? transcriptsData.value[0]
-  console.log("[v0] extract-transcript: selected transcript id:", transcript.id, "displayName:", transcript.displayName)
+  console.log("[v0] extract-transcript POST")
+  console.log("[v0]   itemId  :", itemId)
+  console.log("[v0]   driveId :", driveId)
+  console.log("[v0]   siteUrl :", siteUrl)
 
-  // ── Step 2: Download VTT using temporaryDownloadUrl (pre-signed, no auth needed)
-  //            OR fall back to constructing the streamContent URL with auth header
-  let vttText: string
+  const logs: ApiLog[] = []
+
+  // ── CALL 1: List transcripts ──────────────────────────────────────────────
+  // Exact SharePoint URL format confirmed from browser network tab:
+  // {siteUrl}/_api/v2.1/drives/{driveId}/items/{itemId}/media/transcripts
+  const transcriptsUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${itemId}/media/transcripts`
+
+  console.log("=".repeat(80))
+  console.log("[v0] CALL 1 >>>  GET", transcriptsUrl)
+  console.log("=".repeat(80))
+
+  const transcriptsRes = await fetch(transcriptsUrl, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  })
+
+  const transcriptsRaw = await transcriptsRes.text()
+
+  console.log("[v0] CALL 1 <<<  STATUS:", transcriptsRes.status)
+  console.log("[v0] CALL 1 <<<  BODY  :", transcriptsRaw.slice(0, 800))
+  console.log("=".repeat(80))
+
+  logs.push({
+    step: 1,
+    label: "List Transcripts",
+    url: transcriptsUrl,
+    status: transcriptsRes.status,
+    responsePreview: transcriptsRaw.slice(0, 2000),
+  })
+
+  if (!transcriptsRes.ok) {
+    return NextResponse.json({
+      error: `Call 1 failed (HTTP ${transcriptsRes.status}): ${transcriptsRaw.slice(0, 300)}`,
+      logs,
+    }, { status: transcriptsRes.status })
+  }
+
+  const transcriptsData = JSON.parse(transcriptsRaw) as {
+    value: Array<{
+      id: string
+      displayName?: string
+      isDefault?: boolean
+      languageTag?: string
+      temporaryDownloadUrl?: string
+    }>
+  }
+
+  if (!transcriptsData.value?.length) {
+    return NextResponse.json({ error: "No transcripts found for this recording.", logs }, { status: 404 })
+  }
+
+  const transcript = transcriptsData.value.find((t) => t.isDefault) ?? transcriptsData.value[0]
+  console.log("[v0] Selected transcript id:", transcript.id)
+
+  // ── CALL 2: Download VTT ──────────────────────────────────────────────────
+  // Use temporaryDownloadUrl if present (pre-signed, no auth needed).
+  // Otherwise use streamContent with auth.
+  let vttText = ""
 
   if (transcript.temporaryDownloadUrl) {
     const dlUrl = transcript.temporaryDownloadUrl
+
     console.log("=".repeat(80))
-    console.log("[v0] STEP 2 REQUEST >>> (temporaryDownloadUrl — no auth header needed)")
-    console.log("[v0]   METHOD: GET")
-    console.log("[v0]   URL:", dlUrl.slice(0, 200), "...")
+    console.log("[v0] CALL 2 >>>  GET (temporaryDownloadUrl)")
+    console.log("[v0]             ", dlUrl.slice(0, 120), "...")
     console.log("=".repeat(80))
 
-    try {
-      const dlRes = await fetch(dlUrl)
-      console.log("=".repeat(80))
-      console.log("[v0] STEP 2 RESPONSE <<<")
-      console.log("[v0]   STATUS:", dlRes.status, dlRes.statusText)
-      console.log("[v0]   content-type:", dlRes.headers.get("content-type"))
+    const dlRes = await fetch(dlUrl)
+    vttText = await dlRes.text()
 
-      if (!dlRes.ok) {
-        const errText = await dlRes.text().catch(() => "")
-        console.error("[v0] extract-transcript: temporaryDownloadUrl error:", errText.slice(0, 200))
-        return NextResponse.json(
-          { error: `Failed to download transcript via temporaryDownloadUrl (HTTP ${dlRes.status})` },
-          { status: dlRes.status }
-        )
-      }
+    console.log("[v0] CALL 2 <<<  STATUS:", dlRes.status)
+    console.log("[v0] CALL 2 <<<  VTT length:", vttText.length, "chars")
+    console.log("[v0] CALL 2 <<<  VTT preview:", vttText.slice(0, 300))
+    console.log("=".repeat(80))
 
-      vttText = await dlRes.text()
-      console.log("[v0]   VTT content length:", vttText.length, "chars")
-      console.log("[v0]   VTT preview:", vttText.slice(0, 300))
-      console.log("=".repeat(80))
-    } catch (err) {
-      console.error("[v0] extract-transcript: error downloading via temporaryDownloadUrl:", err)
-      return NextResponse.json({ error: "Network error downloading transcript." }, { status: 502 })
+    logs.push({
+      step: 2,
+      label: "Download VTT (temporaryDownloadUrl)",
+      url: dlUrl.slice(0, 120) + "...",
+      status: dlRes.status,
+      responsePreview: vttText.slice(0, 1000),
+    })
+
+    if (!dlRes.ok) {
+      return NextResponse.json({ error: `Call 2 failed (HTTP ${dlRes.status})`, logs }, { status: dlRes.status })
     }
   } else {
-    // Fallback: Graph native streamContent endpoint
-    const streamUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/media/transcripts/${transcript.id}/content`
+    const streamUrl = `${siteUrl}/_api/v2.1/drives/${driveId}/items/${itemId}/media/transcripts/${transcript.id}/streamContent?is=1&applymediaedits=false`
+
     console.log("=".repeat(80))
-    console.log("[v0] STEP 2 FALLBACK REQUEST >>>")
-    console.log("[v0]   METHOD: GET")
-    console.log("[v0]   URL:", streamUrl)
+    console.log("[v0] CALL 2 >>>  GET (streamContent)")
+    console.log("[v0]             ", streamUrl)
     console.log("=".repeat(80))
 
-    try {
-      const streamRes = await fetch(streamUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      console.log("[v0] extract-transcript: streamContent HTTP status:", streamRes.status)
+    const streamRes = await fetch(streamUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    vttText = await streamRes.text()
 
-      if (!streamRes.ok) {
-        const errText = await streamRes.text().catch(() => "")
-        console.error("[v0] extract-transcript: streamContent error:", errText.slice(0, 200))
-        return NextResponse.json(
-          { error: `Failed to stream transcript (HTTP ${streamRes.status}): ${errText.slice(0, 200)}` },
-          { status: streamRes.status }
-        )
-      }
+    console.log("[v0] CALL 2 <<<  STATUS:", streamRes.status)
+    console.log("[v0] CALL 2 <<<  VTT length:", vttText.length, "chars")
+    console.log("[v0] CALL 2 <<<  VTT preview:", vttText.slice(0, 300))
+    console.log("=".repeat(80))
 
-      vttText = await streamRes.text()
-      console.log("[v0] extract-transcript: VTT streamed, length:", vttText.length)
-    } catch (err) {
-      console.error("[v0] extract-transcript: error in streamContent fallback:", err)
-      return NextResponse.json({ error: "Network error streaming transcript." }, { status: 502 })
+    logs.push({
+      step: 2,
+      label: "Download VTT (streamContent)",
+      url: streamUrl,
+      status: streamRes.status,
+      responsePreview: vttText.slice(0, 1000),
+    })
+
+    if (!streamRes.ok) {
+      return NextResponse.json({ error: `Call 2 failed (HTTP ${streamRes.status}): ${vttText.slice(0, 200)}`, logs }, { status: streamRes.status })
     }
   }
 
-  console.log("[v0] extract-transcript: VTT preview (first 400 chars):\n", vttText.slice(0, 400))
-
-  if (!vttText.trim()) {
-    return NextResponse.json({ error: "Transcript content was empty." }, { status: 422 })
-  }
-
-  // ── Step 3: Parse VTT → structured lines ──────────────────────────────────
   const lines = parseVTT(vttText)
-  console.log("[v0] extract-transcript: final line count:", lines.length)
+  console.log("[v0] Parsed", lines.length, "transcript lines")
 
-  if (lines.length === 0) {
-    return NextResponse.json(
-      { error: "Transcript was found but could not be parsed.", rawVtt: vttText },
-      { status: 422 }
-    )
-  }
-
-  return NextResponse.json({ lines, rawVtt: vttText.slice(0, 1000) })
+  return NextResponse.json({ lines, logs, rawVtt: vttText.slice(0, 500) })
 }

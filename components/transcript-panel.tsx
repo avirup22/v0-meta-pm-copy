@@ -26,6 +26,14 @@ interface TranscriptLine {
   text: string
 }
 
+interface ApiLog {
+  step: number
+  label: string
+  url: string
+  status: number
+  responsePreview: string
+}
+
 type Mode = "idle" | "upload-confirm" | "meeting-search" | "extracting" | "done" | "error"
 
 interface PendingFile {
@@ -54,6 +62,7 @@ export function TranscriptPanel() {
   // Transcript state
   const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([])
   const [extractError, setExtractError] = useState<string | null>(null)
+  const [apiLogs, setApiLogs] = useState<ApiLog[]>([])
   const transcriptRef = useRef<HTMLDivElement>(null)
 
   // Fetch recordings when entering meeting-search mode
@@ -107,9 +116,21 @@ export function TranscriptPanel() {
       return
     }
 
+    if (!pendingFile.driveId || !pendingFile.siteUrl) {
+      setExtractError("Missing driveId or siteUrl on selected recording. Please re-select the meeting.")
+      setMode("error")
+      return
+    }
+
     setMode("extracting")
     setExtractError(null)
+    setApiLogs([])
     setTranscriptLines([])
+
+    console.log("[v0] TranscriptPanel handleConfirm:")
+    console.log("[v0]   itemId  :", pendingFile.driveItemId)
+    console.log("[v0]   driveId :", pendingFile.driveId)
+    console.log("[v0]   siteUrl :", pendingFile.siteUrl)
 
     try {
       const res = await fetch("/api/extract-transcript", {
@@ -117,11 +138,20 @@ export function TranscriptPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           itemId: pendingFile.driveItemId,
+          driveId: pendingFile.driveId,
+          siteUrl: pendingFile.siteUrl,
           token,
         }),
       })
 
-      const data = await res.json() as { lines?: TranscriptLine[]; error?: string; rawVtt?: string }
+      const data = await res.json() as {
+        lines?: TranscriptLine[]
+        error?: string
+        logs?: ApiLog[]
+        rawVtt?: string
+      }
+
+      if (data.logs) setApiLogs(data.logs)
 
       if (!res.ok || data.error) {
         throw new Error(data.error ?? `Server error: HTTP ${res.status}`)
@@ -144,6 +174,7 @@ export function TranscriptPanel() {
     setDropdownOpen(false)
     setTranscriptLines([])
     setExtractError(null)
+    setApiLogs([])
     setMode("idle")
   }
 
@@ -310,6 +341,36 @@ export function TranscriptPanel() {
           >
             Cancel
           </Button>
+        </div>
+      )}
+
+      {/* API CALL LOGS — shown during extracting, error and done states */}
+      {apiLogs.length > 0 && (
+        <div className="flex flex-col gap-2 mt-1">
+          <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase font-sans">API Calls</p>
+          {apiLogs.map((log) => (
+            <div key={log.step} className="rounded-lg border border-border bg-secondary overflow-hidden text-xs font-mono">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card">
+                <span
+                  className={`shrink-0 font-bold px-1.5 py-0.5 rounded text-white ${log.status >= 200 && log.status < 300 ? "bg-green-600" : "bg-red-500"}`}
+                >
+                  {log.status}
+                </span>
+                <span className="font-sans font-semibold text-foreground">Step {log.step}: {log.label}</span>
+              </div>
+              <div className="px-3 py-2 border-b border-border text-muted-foreground break-all leading-relaxed">
+                <span className="text-primary font-semibold">GET </span>{log.url}
+              </div>
+              <details>
+                <summary className="cursor-pointer px-3 py-1.5 text-muted-foreground hover:text-foreground select-none">
+                  Response body
+                </summary>
+                <pre className="px-3 pb-3 pt-1 overflow-x-auto overflow-y-auto max-h-48 whitespace-pre-wrap text-muted-foreground leading-relaxed">
+                  {log.responsePreview}
+                </pre>
+              </details>
+            </div>
+          ))}
         </div>
       )}
 
