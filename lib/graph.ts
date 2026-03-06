@@ -119,8 +119,9 @@ export async function fetchRecordingFiles(token: string): Promise<RecordingsResu
   const recordingsFolder = await getDriveItemByPath(token, "Recordings")
   console.log("[v0] fetchRecordingFiles – Recordings folder id:", recordingsFolder.id, "name:", recordingsFolder.name)
 
-  // Step 3 – list all children; include parentReference to get the SharePoint b!... driveId
-  const url = `${GRAPH_BASE}/me/drive/items/${recordingsFolder.id}/children?$select=id,name,file,folder,size,webUrl,parentReference&$top=200&$orderby=name`
+  // Step 3 – list all children WITHOUT $select so Graph returns the full object
+  // including parentReference.driveId (the SharePoint b!... format) and parentReference.siteUrl
+  const url = `${GRAPH_BASE}/me/drive/items/${recordingsFolder.id}/children?$top=200&$orderby=name`
   console.log("[v0] fetchRecordingFiles listing children →", url)
 
   const res = await fetch(url, {
@@ -136,17 +137,45 @@ export async function fetchRecordingFiles(token: string): Promise<RecordingsResu
     throw new Error(message)
   }
 
-  const data: { value: (DriveItem & { size?: number; parentReference?: { driveId?: string; siteUrl?: string } })[] } = await res.json()
+  type RawItem = DriveItem & {
+    size?: number
+    parentReference?: {
+      driveId?: string
+      siteId?: string
+      siteUrl?: string
+      sharepointIds?: { siteUrl?: string }
+    }
+    sharepointIds?: { siteUrl?: string }
+  }
+  const data: { value: RawItem[] } = await res.json()
   console.log("[v0] fetchRecordingFiles raw item count:", data.value.length)
   console.log("[v0] fetchRecordingFiles raw names:", data.value.map((i) => i.name))
 
-  // Keep only files; use parentReference.driveId which is the SharePoint b!... format
-  // needed for the /_api/v2.1/ transcript endpoint
+  // Log first item's full parentReference so we can see what driveId format Graph returns
+  if (data.value.length > 0) {
+    console.log("[v0] fetchRecordingFiles first item parentReference:", JSON.stringify(data.value[0].parentReference))
+  }
+
+  // Keep only files; use parentReference.driveId (the b!... SharePoint format)
   const files = data.value
     .filter((item) => item.file !== undefined)
     .map((item) => {
       const spDriveId = item.parentReference?.driveId ?? driveId
-      const spSiteUrl = item.parentReference?.siteUrl ?? siteUrl
+      // siteUrl comes from parentReference.siteUrl or sharepointIds.siteUrl
+      // Derive siteUrl from the item's own webUrl — most reliable source
+      // webUrl = https://indegene123-my.sharepoint.com/personal/xxx/Documents/Recordings/file.mp4
+      // We want: https://indegene123-my.sharepoint.com/personal/xxx
+      let spSiteUrl = siteUrl
+      if (item.webUrl) {
+        const match = item.webUrl.match(/^(https:\/\/[^/]+\/personal\/[^/]+)/)
+        if (match) spSiteUrl = match[1]
+      }
+      spSiteUrl =
+        spSiteUrl ||
+        item.parentReference?.siteUrl ||
+        item.parentReference?.sharepointIds?.siteUrl ||
+        item.sharepointIds?.siteUrl ||
+        siteUrl
       console.log("[v0] fetchRecordingFiles item:", item.name, "| spDriveId:", spDriveId, "| spSiteUrl:", spSiteUrl)
       return {
         ...item,
