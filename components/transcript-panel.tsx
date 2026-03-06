@@ -52,26 +52,80 @@ interface TranscriptPanelProps {
   userName?: string
 }
 
-// Extract all raw cues from a VTT string
+// Extract all raw cues from a VTT string.
+// Handles both standard VTT (blank-line separated blocks) and
+// the SharePoint/Teams format where UUID cue IDs and timestamps appear
+// on the same line or with no blank-line separation.
 function extractCues(vtt: string): { timestamp: string; speaker: string; text: string }[] {
   const cues: { timestamp: string; speaker: string; text: string }[] = []
-  const blocks = vtt.split(/\n\n+/)
+
+  // Normalise: ensure every timestamp line is preceded by a newline
+  // so we can reliably split on it.
+  // Timestamp pattern: HH:MM:SS.mmm --> HH:MM:SS.mmm (with optional position data)
+  const TS_RE = /(\d{1,2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[.,]\d{3}[^\n]*)/g
+
+  // Replace any UUID-style cue identifiers (e.g. "abc.../10-0") with a newline marker
+  // so they don't get confused with text content
+  const UUID_CUE_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[\d-]+/gi
+
+  // First: normalise line endings
+  let normalised = vtt.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+
+  // Remove UUID cue IDs (replace with blank line to keep block separation)
+  normalised = normalised.replace(UUID_CUE_RE, "\n")
+
+  // Ensure each timestamp starts on its own line
+  normalised = normalised.replace(TS_RE, "\n$1\n")
+
+  // Now split into blocks by blank lines as standard
+  const blocks = normalised.split(/\n{2,}/)
+
   for (const block of blocks) {
-    const rows = block.trim().split("\n")
+    const rows = block.trim().split("\n").map((r) => r.trim()).filter(Boolean)
+    if (rows.length === 0) continue
+
     const tsIdx = rows.findIndex((l) => l.includes(" --> "))
     if (tsIdx === -1) continue
-    const timestamp = rows[tsIdx].split(" --> ")[0].trim().replace(/\.\d{3}$/, "")
+
+    const timestamp = rows[tsIdx].split(" --> ")[0].trim().replace(/[.,]\d{3}.*$/, "")
+
+    // Text content is everything after the timestamp line
     const rawText = rows.slice(tsIdx + 1).join(" ").trim()
     if (!rawText) continue
-    const speakerMatch = rawText.match(/^<v ([^>]+)>/)
-    const speaker = speakerMatch ? speakerMatch[1].trim() : ""
-    const text = rawText
-      .replace(/<v [^>]+>/g, "")
-      .replace(/<\/v>/g, "")
-      .replace(/<[^>]+>/g, "")
-      .trim()
+
+    // Speaker can be in <v Speaker> tag or on the line just before the timestamp
+    const vTagMatch = rawText.match(/^<v ([^>]+)>/)
+    let speaker = ""
+    let text = rawText
+
+    if (vTagMatch) {
+      speaker = vTagMatch[1].trim()
+      text = rawText
+        .replace(/<v [^>]+>/g, "")
+        .replace(/<\/v>/g, "")
+        .replace(/<[^>]+>/g, "")
+        .trim()
+    } else {
+      // Check if the line before the timestamp looks like a speaker name
+      // (not a UUID, not a timestamp, not "WEBVTT")
+      if (tsIdx > 0) {
+        const candidate = rows[tsIdx - 1]
+        if (
+          candidate &&
+          !candidate.includes("-->") &&
+          !candidate.match(/^WEBVTT/i) &&
+          !candidate.match(/^[0-9a-f-]{36}/i) &&
+          candidate.length < 80
+        ) {
+          speaker = candidate
+        }
+      }
+      text = rawText.replace(/<[^>]+>/g, "").trim()
+    }
+
     if (text) cues.push({ timestamp, speaker, text })
   }
+
   return cues
 }
 
