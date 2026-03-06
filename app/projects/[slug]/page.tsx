@@ -1,10 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { use } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { TranscriptPanel } from "@/components/transcript-panel"
+import { useAuth } from "@/contexts/auth-context"
 import { ChevronRight, ArrowRight, Plus } from "lucide-react"
 
 function slugToTitle(slug: string) {
@@ -25,8 +27,18 @@ interface PageProps {
 export default function ProjectPage({ params }: PageProps) {
   const { slug } = use(params)
   const projectName = slugToTitle(slug)
+  const { isAuthenticated } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.replace("/")
+    }
+  }, [isAuthenticated, router])
 
   const [moms, setMoms] = useState(DEFAULT_MOMS)
+
+  if (!isAuthenticated) return null
 
   function handleCreateMOM() {
     setMoms((prev) => [...prev, `MOM data ${prev.length + 1}`])
@@ -37,7 +49,7 @@ export default function ProjectPage({ params }: PageProps) {
       <main className="max-w-6xl mx-auto px-8 py-10 flex flex-col gap-8">
         {/* Back link */}
         <Link
-          href="/"
+          href="/projects"
           className="text-sm text-muted-foreground hover:text-primary font-sans transition-colors w-fit"
         >
           ← Back to projects
