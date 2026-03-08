@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { X, Loader2, Upload } from "lucide-react"
+import { useState, useRef } from "react"
+import { X, Loader2, Upload, FileText } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { sendTranscriptToWebhook, fetchProjectDatabase } from "@/lib/graph"
 
@@ -21,26 +21,58 @@ export function NewMeetingModal({
   const { token } = useAuth()
   const [step, setStep] = useState<"upload" | "details" | "processing" | "response">("upload")
   const [transcript, setTranscript] = useState("")
+  const [fileName, setFileName] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [webhookResponse, setWebhookResponse] = useState<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [meetingDetails, setMeetingDetails] = useState({
     title: "",
-    date: new Date().toISOString().split("T")[0], // Today's date in YYYY-MM-DD format
+    date: new Date().toISOString().split("T")[0],
   })
 
   function generateCode(): string {
     return Math.floor(10000000 + Math.random() * 90000000).toString()
   }
 
-  async function handleUploadSubmit() {
-    if (!transcript.trim()) {
-      setError("Please provide a transcript")
+  function vttToPlainText(vttContent: string): string {
+    // Remove VTT header
+    let text = vttContent.replace(/^WEBVTT\n\n/, "")
+    
+    // Remove timestamps (hh:mm:ss.ms --> hh:mm:ss.ms)
+    text = text.replace(/\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}\n/g, "")
+    
+    // Remove empty lines
+    text = text.replace(/^\s*$/gm, "")
+    
+    // Clean up multiple spaces and line breaks
+    text = text.replace(/\n\n+/g, "\n").trim()
+    
+    return text
+  }
+
+  async function handleFileSelect(file: File) {
+    if (!file.name.endsWith(".vtt")) {
+      setError("Please upload a .vtt file")
       return
     }
-    setStep("details")
-    setError(null)
+
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const vttContent = await file.text()
+      const plainText = vttToPlainText(vttContent)
+      
+      setTranscript(plainText)
+      setFileName(file.name)
+      setStep("details")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to read file")
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleDetailsSubmit() {
@@ -82,8 +114,6 @@ export function NewMeetingModal({
         })),
       ]
 
-      console.log("[v0] Sending to webhook with project_id:", projectFolderId, "and team count:", projectTeam.length)
-
       // Send to webhook
       const response = await sendTranscriptToWebhook({
         title: meetingDetails.title,
@@ -94,8 +124,6 @@ export function NewMeetingModal({
         project_team: projectTeam,
         transcript,
       })
-
-      console.log("[v0] Webhook response:", response)
 
       // Show the response in a popup
       setWebhookResponse(response)
@@ -109,7 +137,6 @@ export function NewMeetingModal({
   }
 
   function handleConfirmResponse() {
-    // Call the onCreated callback with the response
     onCreated(webhookResponse)
     onClose()
   }
@@ -139,12 +166,49 @@ export function NewMeetingModal({
 
         {step === "upload" && (
           <div className="flex flex-col gap-4">
-            <textarea
-              placeholder="Paste your meeting transcript here..."
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground font-sans text-sm focus:outline-none focus:ring-2 focus:ring-primary min-h-[300px]"
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".vtt"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleFileSelect(file)
+              }}
+              className="hidden"
             />
+            
+            {fileName ? (
+              <div className="flex items-center gap-3 p-4 rounded-lg border border-border bg-secondary">
+                <FileText size={24} className="text-primary" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground font-sans truncate">{fileName}</p>
+                  <p className="text-xs text-muted-foreground font-sans">VTT transcript loaded</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setFileName(null)
+                    setTranscript("")
+                    if (fileInputRef.current) fileInputRef.current.value = ""
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                className="flex flex-col items-center justify-center gap-3 p-8 rounded-lg border-2 border-dashed border-border bg-secondary hover:border-primary transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Upload size={32} className="text-muted-foreground" />
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-foreground font-sans">Click to upload VTT file</p>
+                  <p className="text-xs text-muted-foreground font-sans mt-1">or drag and drop</p>
+                </div>
+              </button>
+            )}
+            
             <div className="flex gap-3 ml-auto">
               <button
                 onClick={onClose}
@@ -153,12 +217,19 @@ export function NewMeetingModal({
                 Cancel
               </button>
               <button
-                onClick={handleUploadSubmit}
-                className="px-4 py-2 text-sm font-sans text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+                onClick={() => setStep("details")}
+                disabled={!fileName || loading}
+                className="px-4 py-2 text-sm font-sans text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
                 style={{ background: "var(--primary)" }}
               >
-                <Upload size={14} strokeWidth={2} />
-                Next
+                {loading ? (
+                  <>
+                    <Loader2 size={14} strokeWidth={2} className="animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Next"
+                )}
               </button>
             </div>
           </div>
