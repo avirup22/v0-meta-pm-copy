@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { X, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
-import { replaceTeamRows } from '@/lib/graph'
+import { insertTeamRows } from '@/lib/graph'
 import type { TeamMemberRow } from '@/lib/graph'
 
 interface EditTeamModalProps {
@@ -58,14 +58,23 @@ export function EditTeamModal({ title, folderId, team, sheet, onClose, onSave }:
     setLoading(true)
     setError(null)
     try {
-      const newMembers = members.map((m) => ({
-        Project_folder_ID: folderId,
-        Name: m.name,
-        Email: m.email,
-        Designation: m.designation,
-      }))
-      // Use replaceTeamRows to delete old rows first, then insert new ones
-      await replaceTeamRows(token, newMembers, sheet)
+      // Only insert members that DON'T already exist (by email)
+      const existingEmails = new Set(team.map((t) => t.Email.toLowerCase()))
+      const newMembers = members
+        .filter((m) => !existingEmails.has(m.email.toLowerCase()))
+        .map((m) => ({
+          Project_folder_ID: folderId,
+          Name: m.name,
+          Email: m.email,
+          Designation: m.designation,
+        }))
+
+      console.log("[v0] EditTeamModal: inserting", newMembers.length, "new members (existing:", existingEmails.size, ")")
+      
+      if (newMembers.length > 0) {
+        await insertTeamRows(token, newMembers, sheet)
+      }
+      
       await onSave()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save team members')
