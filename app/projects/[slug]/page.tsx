@@ -180,6 +180,14 @@ export default function ProjectPage({ params }: PageProps) {
   const endDate     = formatDate(proj?.End_date ?? "")
   const status      = proj?.Project_status ?? "—"
   const type        = proj?.Project_Type ?? "—"
+  
+  // De-duplicate team members by email (fix for duplicate rows in Excel)
+  const dedupInternalTeam = db?.internalTeam 
+    ? Array.from(new Map(db.internalTeam.map(m => [m.Email, m])).values())
+    : []
+  const dedupClientTeam = db?.clientTeam
+    ? Array.from(new Map(db.clientTeam.map(m => [m.Email, m])).values())
+    : []
 
   const internalTeam = db?.internalTeam ?? []
   const clientTeam   = db?.clientTeam ?? []
@@ -351,9 +359,9 @@ export default function ProjectPage({ params }: PageProps) {
                     Edit
                   </button>
                 </div>
-                {internalTeam.length > 0 ? (
+                {dedupInternalTeam.length > 0 ? (
                   <div className="flex flex-wrap gap-4">
-                    {internalTeam.map((m, i) => (
+                    {dedupInternalTeam.map((m, i) => (
                       <div key={m.Email || m.Name} className="flex flex-col items-center gap-1.5">
                         <div
                           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold font-sans"
@@ -387,9 +395,9 @@ export default function ProjectPage({ params }: PageProps) {
                     Edit
                   </button>
                 </div>
-                {clientTeam.length > 0 ? (
+                {dedupClientTeam.length > 0 ? (
                   <div className="flex flex-wrap gap-4">
-                    {clientTeam.map((m, i) => (
+                    {dedupClientTeam.map((m, i) => (
                       <div key={m.Email || m.Name} className="flex flex-col items-center gap-1.5">
                         <div
                           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold font-sans"
@@ -601,7 +609,7 @@ export default function ProjectPage({ params }: PageProps) {
         <EditTeamModal
           title="Edit Internal Team"
           folderId={folderId}
-          team={internalTeam}
+          team={dedupInternalTeam}
           sheet="internal_team"
           onClose={() => setEditModal(null)}
           onSave={loadData}
@@ -612,7 +620,7 @@ export default function ProjectPage({ params }: PageProps) {
         <EditTeamModal
           title="Edit Client Team"
           folderId={folderId}
-          team={clientTeam}
+          team={dedupClientTeam}
           sheet="client_team"
           onClose={() => setEditModal(null)}
           onSave={loadData}

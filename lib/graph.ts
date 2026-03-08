@@ -469,9 +469,8 @@ export async function updateExcelRow(token: string, sheet: string, projectFolder
 }
 
 /**
- * Replace all team members for a project with new ones.
- * De-duplicates by email to prevent accumulating duplicate rows.
- * Deletes old rows first, then inserts new ones.
+ * Replace team members for a project by de-duplicating by email.
+ * Reads all data, keeps non-project rows, adds de-duped new members, rebuilds sheet.
  */
 export async function replaceTeamRows(
   token: string,
@@ -483,53 +482,51 @@ export async function replaceTeamRows(
   const fileId = await findDatabaseFile(token)
   const projectFolderId = newMembers[0].Project_folder_ID
 
-  // Get all rows currently in the sheet
+  // 1. Read all existing data
   const allRows = await readWorksheet<TeamMemberRow>(token, fileId, sheet)
-  
-  // Identify rows to delete: all rows with this project ID
-  const oldRowsForProject = allRows.filter((r) => r.Project_folder_ID === projectFolderId)
-  console.log("[v0] replaceTeamRows: found", oldRowsForProject.length, "existing rows for project", projectFolderId)
-  console.log("[v0] replaceTeamRows: incoming", newMembers.length, "new members to save")
+  console.log("[v0] replaceTeamRows: read", allRows.length, "total rows from", sheet)
 
-  // Clear the sheet entirely and rebuild with deduped data
-  // 1. Build list of all rows except those for this project
+  // 2. Keep rows that are NOT for this project
   const rowsToKeep = allRows.filter((r) => r.Project_folder_ID !== projectFolderId)
-  
-  // 2. De-duplicate new members by email (keep first occurrence)
-  const newMembersByEmail = new Map<string, TeamMemberRow>()
+  console.log("[v0] replaceTeamRows: keeping', rowsToKeep.length, "rows from other projects")
+
+  // 3. De-duplicate incoming members by Email (keep only first of each email)
+  const memberMap = new Map<string, TeamMemberRow>()
   for (const member of newMembers) {
-    if (!newMembersByEmail.has(member.Email)) {
-      newMembersByEmail.set(member.Email, member)
+    if (!memberMap.has(member.Email)) {
+      memberMap.set(member.Email, member)
     }
   }
-  const deduped = Array.from(newMembersByEmail.values())
-  console.log("[v0] replaceTeamRows: de-duped to", deduped.length, "unique members")
+  const dedupedNewMembers = Array.from(memberMap.values())
+  console.log("[v0] replaceTeamRows: de-duped new members from", newMembers.length, "to", dedupedNewMembers.length)
 
-  // 3. Combine: kept rows + new deduped members
-  const allDataToInsert = [...rowsToKeep, ...deduped]
-  console.log("[v0] replaceTeamRows: total rows to save:", allDataToInsert.length)
+  // 4. Combine: old rows from other projects + new deduped
+  const finalData = [...rowsToKeep, ...dedupedNewMembers]
+  console.log("[v0] replaceTeamRows: final data will have', finalData.length, "total rows")
 
-  // 4. Delete entire sheet content (except header)
-  if (allRows.length > 0) {
-    const startRow = 2 // Excel 1-indexed, row 1 is header
-    const endRow = allRows.length + 1
-    const deleteUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/range(address='A${startRow}:D${endRow}')`
-    
-    console.log("[v0] replaceTeamRows: clearing sheet rows", startRow, "-", endRow)
-    const deleteRes = await fetch(deleteUrl, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    
-    if (!deleteRes.ok) {
-      console.warn("[v0] Failed to clear sheet, but continuing with insert")
-    }
+  if (finalData.length === 0) {
+    console.log("[v0] replaceTeamRows: no data to save, skipping")
+    return
   }
 
-  // 5. Re-insert all data
-  if (allDataToInsert.length > 0) {
-    await insertTeamRows(token, allDataToInsert, sheet)
+  // 5. Insert all final data using table add API
+  const bulkRows = finalData.map((m) => [m.Project_folder_ID, m.Name, m.Email, m.Designation])
+  const insertUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/tables/${sheet}/rows/add`
+
+  console.log("[v0] replaceTeamRows: inserting", bulkRows.length, "rows to', sheet)
+  const insertRes = await fetch(insertUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values: bulkRows }),
+  })
+
+  if (!insertRes.ok) {
+    const err = await insertRes.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `Failed to insert rows: HTTP ${insertRes.status}`)
   }
 
-  console.log("[v0] replaceTeamRows: complete")
+  console.log("[v0] replaceTeamRows: successfully inserted all rows")
 }
