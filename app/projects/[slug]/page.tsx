@@ -51,6 +51,40 @@ function initials(name: string) {
     .join("")
 }
 
+// Format Excel date (serial number) or dd-mm-yyyy string to dd-mm-yyyy
+function formatDate(value: string | number): string {
+  if (!value) return "—"
+  
+  // If it's a string in dd-mm-yyyy format, return as-is
+  if (typeof value === "string" && /^\d{2}-\d{2}-\d{4}$/.test(value)) {
+    return value
+  }
+  
+  // If it's an Excel serial number (large number)
+  if (typeof value === "number" && value > 1000) {
+    // Excel epoch starts at Jan 1, 1900
+    const excelEpoch = new Date(1900, 0, -1)
+    const date = new Date(excelEpoch.getTime() + value * 86400000)
+    const dd = String(date.getDate()).padStart(2, "0")
+    const mm = String(date.getMonth() + 1).padStart(2, "0")
+    const yyyy = date.getFullYear()
+    return `${dd}-${mm}-${yyyy}`
+  }
+  
+  // Try to parse as date string
+  if (typeof value === "string") {
+    const d = new Date(value)
+    if (!isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, "0")
+      const mm = String(d.getMonth() + 1).padStart(2, "0")
+      const yyyy = d.getFullYear()
+      return `${dd}-${mm}-${yyyy}`
+    }
+  }
+  
+  return String(value)
+}
+
 const AVATAR_COLORS = [
   "#3b5fc0", "#0e9e6e", "#c07a2a", "#7c3abd",
   "#c0393b", "#1a8fa8", "#6b7c45", "#a83a70",
@@ -122,8 +156,8 @@ export default function ProjectPage({ params }: PageProps) {
   const projectName = proj?.Project_Name ?? slugToTitle(slug)
   const clientName  = proj?.Client_Name ?? "—"
   const pm          = proj?.Project_Manager ?? displayName ?? "—"
-  const startDate   = proj?.Start_Date ?? "—"
-  const endDate     = proj?.End_date ?? "—"
+  const startDate   = formatDate(proj?.Start_Date ?? "")
+  const endDate     = formatDate(proj?.End_date ?? "")
   const status      = proj?.Project_status ?? "—"
   const type        = proj?.Project_Type ?? "—"
 
@@ -244,7 +278,12 @@ export default function ProjectPage({ params }: PageProps) {
 
               {/* Project overview table */}
               <div className="bg-card rounded-xl border border-border p-5 flex flex-col gap-0 divide-y divide-border">
-                <h2 className="text-sm font-semibold text-foreground font-sans pb-3">Project Overview</h2>
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
+                  <h2 className="text-sm font-semibold text-foreground font-sans">Project Overview</h2>
+                  <button className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors">
+                    Edit
+                  </button>
+                </div>
                 {overviewRows.map((row) => (
                   <div key={row.label} className="flex items-center justify-between py-2 gap-4">
                     <span className="text-xs text-muted-foreground font-sans">{row.label}</span>
@@ -272,9 +311,14 @@ export default function ProjectPage({ params }: PageProps) {
               {/* Internal Team */}
               {internalTeam.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Users size={14} className="text-muted-foreground" />
-                    <h2 className="text-sm font-semibold text-foreground font-sans">Internal Team</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Users size={14} className="text-muted-foreground" />
+                      <h2 className="text-sm font-semibold text-foreground font-sans">Internal Team</h2>
+                    </div>
+                    <button className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors">
+                      Edit
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-4">
                     {internalTeam.map((m, i) => (
@@ -296,9 +340,14 @@ export default function ProjectPage({ params }: PageProps) {
               {/* Client Team */}
               {clientTeam.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Briefcase size={14} className="text-muted-foreground" />
-                    <h2 className="text-sm font-semibold text-foreground font-sans">Client Team</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Briefcase size={14} className="text-muted-foreground" />
+                      <h2 className="text-sm font-semibold text-foreground font-sans">Client Team</h2>
+                    </div>
+                    <button className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors">
+                      Edit
+                    </button>
                   </div>
                   <div className="flex flex-wrap gap-4">
                     {clientTeam.map((m, i) => (
