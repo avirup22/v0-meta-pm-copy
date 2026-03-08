@@ -469,8 +469,9 @@ export async function updateExcelRow(token: string, sheet: string, projectFolder
 }
 
 /**
- * Delete all rows for a project from a team sheet, then insert new ones.
- * This replaces old team members with updated ones.
+ * Replace all team members for a project with new ones.
+ * De-duplicates by email to prevent accumulating duplicate rows.
+ * Deletes old rows first, then inserts new ones.
  */
 export async function replaceTeamRows(
   token: string,
@@ -482,32 +483,53 @@ export async function replaceTeamRows(
   const fileId = await findDatabaseFile(token)
   const projectFolderId = newMembers[0].Project_folder_ID
 
-  // Get all rows to identify which ones to delete
+  // Get all rows currently in the sheet
   const allRows = await readWorksheet<TeamMemberRow>(token, fileId, sheet)
-  const rowIndicesToDelete = allRows
-    .map((row, idx) => ({ row, idx }))
-    .filter((item) => item.row.Project_folder_ID === projectFolderId)
-    .map((item) => item.idx)
-    .sort((a, b) => b - a) // Sort descending to delete from bottom up
+  
+  // Identify rows to delete: all rows with this project ID
+  const oldRowsForProject = allRows.filter((r) => r.Project_folder_ID === projectFolderId)
+  console.log("[v0] replaceTeamRows: found", oldRowsForProject.length, "existing rows for project", projectFolderId)
+  console.log("[v0] replaceTeamRows: incoming", newMembers.length, "new members to save")
 
-  // Delete old rows using Table API (from bottom to top to avoid index shifts)
-  for (const idx of rowIndicesToDelete) {
-    const deleteUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/tables/${sheet}/rows/${idx}`
+  // Clear the sheet entirely and rebuild with deduped data
+  // 1. Build list of all rows except those for this project
+  const rowsToKeep = allRows.filter((r) => r.Project_folder_ID !== projectFolderId)
+  
+  // 2. De-duplicate new members by email (keep first occurrence)
+  const newMembersByEmail = new Map<string, TeamMemberRow>()
+  for (const member of newMembers) {
+    if (!newMembersByEmail.has(member.Email)) {
+      newMembersByEmail.set(member.Email, member)
+    }
+  }
+  const deduped = Array.from(newMembersByEmail.values())
+  console.log("[v0] replaceTeamRows: de-duped to", deduped.length, "unique members")
+
+  // 3. Combine: kept rows + new deduped members
+  const allDataToInsert = [...rowsToKeep, ...deduped]
+  console.log("[v0] replaceTeamRows: total rows to save:', allDataToInsert.length)
+
+  // 4. Delete entire sheet content (except header)
+  if (allRows.length > 0) {
+    const startRow = 2 // Excel 1-indexed, row 1 is header
+    const endRow = allRows.length + 1
+    const deleteUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/range(address='A${startRow}:D${endRow}')`
     
-    console.log("[v0] replaceTeamRows: deleting row index", idx)
+    console.log("[v0] replaceTeamRows: clearing sheet rows', startRow, '-', endRow)
     const deleteRes = await fetch(deleteUrl, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
     
     if (!deleteRes.ok) {
-      const err = await deleteRes.json().catch(() => ({}))
-      console.warn(`[v0] Failed to delete row ${idx}:`, err?.error?.message)
+      console.warn("[v0] Failed to clear sheet, but continuing with insert")
     }
   }
 
-  console.log("[v0] replaceTeamRows: deleted", rowIndicesToDelete.length, "old rows")
+  // 5. Re-insert all data
+  if (allDataToInsert.length > 0) {
+    await insertTeamRows(token, allDataToInsert, sheet)
+  }
 
-  // Insert new rows
-  await insertTeamRows(token, newMembers, sheet)
+  console.log("[v0] replaceTeamRows: complete")
 }
