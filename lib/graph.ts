@@ -513,7 +513,7 @@ export async function replaceTeamRows(
   const bulkRows = finalData.map((m) => [m.Project_folder_ID, m.Name, m.Email, m.Designation])
   const insertUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/tables/${sheet}/rows/add`
 
-  console.log("[v0] replaceTeamRows: inserting", bulkRows.length, "rows to', sheet)
+  console.log("[v0] replaceTeamRows: inserting", bulkRows.length, "rows to", sheet)
   const insertRes = await fetch(insertUrl, {
     method: "POST",
     headers: {
