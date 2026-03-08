@@ -425,7 +425,6 @@ function NewMeetingModal({
 export default function MeetingsListPage({ params }: PageProps) {
   const { slug } = use(params)
   const projectName = slugToTitle(slug)
-  const { isAuthenticated } = useAuth()
   const router = useRouter()
   const [showModal, setShowModal] = useState(false)
   const [meetings, setMeetings] = useState<MeetingRecord[]>([])
