@@ -657,6 +657,106 @@ export async function sendTranscriptToWebhook(payload: {
 
 // ─── Meeting Data Insertion Functions ──────────────────────────────────────────
 
+async function insertMeetingRows(token: string, rows: MeetingRow[]): Promise<void> {
+  if (rows.length === 0) return
+  const fileId = await findDatabaseFile(token)
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/meetings/tables/meetings/rows/add`
+  const values = rows.map((r) => [r.Meeting_ID, r.Project_folder_ID, r.Meeting_title, r.Meeting_date, r.Organizer])
+  console.log("[v0] insertMeetingRows:", rows.length, "rows")
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+}
+
+async function insertDecisionRows(token: string, rows: DecisionRow[]): Promise<void> {
+  if (rows.length === 0) return
+  const fileId = await findDatabaseFile(token)
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/decisions/tables/decisions/rows/add`
+  const values = rows.map((r) => [r.Meeting_ID, r.Decision_ID, r.Decision])
+  console.log("[v0] insertDecisionRows:", rows.length, "rows")
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+}
+
+async function insertActionRows(token: string, rows: ActionRow[]): Promise<void> {
+  if (rows.length === 0) return
+  const fileId = await findDatabaseFile(token)
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/actions/tables/actions/rows/add`
+  const values = rows.map((r) => [r.Meeting_ID, r.Action_ID, r.Task, r.Owner, r.Owner_email, r.Due_Date, r.Status])
+  console.log("[v0] insertActionRows:", rows.length, "rows")
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+}
+
+async function insertRiskRows(token: string, rows: RiskRow[]): Promise<void> {
+  if (rows.length === 0) return
+  const fileId = await findDatabaseFile(token)
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/risks/tables/risks/rows/add`
+  const values = rows.map((r) => [r.Meeting_ID, r.Risk_ID, r.Risk])
+  console.log("[v0] insertRiskRows:", rows.length, "rows")
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+}
+
+async function insertDiscussionRows(token: string, rows: DiscussionRow[]): Promise<void> {
+  if (rows.length === 0) return
+  const fileId = await findDatabaseFile(token)
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/discussion/tables/discussion/rows/add`
+  const values = rows.map((r) => [r.Meeting_ID, r.Discussion_ID, r.Discussion])
+  console.log("[v0] insertDiscussionRows:", rows.length, "rows")
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+}
+
 /**
  * Save webhook response data (decisions, actions, risks, discussions) to Excel database.
  */
@@ -671,8 +771,6 @@ export async function saveMeetingDataToExcel(
   webhookResponse: any
 ): Promise<void> {
   try {
-    const fileId = await findDatabaseFile(token)
-
     // Extract organizer from project team (first internal team member or default)
     const organizer = projectTeam[0]?.name || "Account Holder"
 
@@ -685,7 +783,7 @@ export async function saveMeetingDataToExcel(
       Organizer: organizer,
     }
 
-    await insertRows(token, fileId, "meetings", [meetingRow])
+    await insertMeetingRows(token, [meetingRow])
     console.log("[v0] Inserted meeting record:", meetingId)
 
     // 2. Insert decisions with auto-generated IDs
@@ -697,7 +795,7 @@ export async function saveMeetingDataToExcel(
     }))
 
     if (decisionRows.length > 0) {
-      await insertRows(token, fileId, "decisions", decisionRows)
+      await insertDecisionRows(token, decisionRows)
       console.log("[v0] Inserted", decisionRows.length, "decisions")
     }
 
@@ -722,7 +820,7 @@ export async function saveMeetingDataToExcel(
     })
 
     if (actionRows.length > 0) {
-      await insertRows(token, fileId, "actions", actionRows)
+      await insertActionRows(token, actionRows)
       console.log("[v0] Inserted", actionRows.length, "actions with owner emails looked up")
     }
 
@@ -735,7 +833,7 @@ export async function saveMeetingDataToExcel(
     }))
 
     if (riskRows.length > 0) {
-      await insertRows(token, fileId, "risks", riskRows)
+      await insertRiskRows(token, riskRows)
       console.log("[v0] Inserted", riskRows.length, "risks")
     }
 
@@ -748,7 +846,7 @@ export async function saveMeetingDataToExcel(
     }))
 
     if (discussionRows.length > 0) {
-      await insertRows(token, fileId, "discussion", discussionRows)
+      await insertDiscussionRows(token, discussionRows)
       console.log("[v0] Inserted", discussionRows.length, "discussion points")
     }
 
