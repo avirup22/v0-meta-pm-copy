@@ -161,71 +161,91 @@ export function AppSidebar() {
                   <span className="text-xs font-sans" style={{ color: "var(--nav-muted)" }}>Loading...</span>
                 </div>
               )}
-              {!loadingProjects && projects.map((p) => {
-                const href = `/projects/${toSlug(p.name)}`
-                const active = pathname === href
-                return (
-                  <Link
-                    key={p.id}
-                    href={href}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors truncate"
-                    style={{
-                      color: active ? "var(--nav-active-fg)" : "var(--nav-muted)",
-                      background: active ? "var(--nav-active-bg)" : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
-                    }}
-                  >
-                    <span className="w-1 h-1 rounded-full shrink-0" style={{ background: "var(--nav-muted)" }} />
-                    {p.name}
-                  </Link>
-                )
-              })}
-              {/* Create project */}
-              <button
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors"
-                style={{ color: "var(--nav-muted)" }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)"
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "transparent"
-                }}
-              >
-                <Plus size={12} strokeWidth={2.5} />
-                Create Project
-              </button>
+
+              {!loadingProjects && (() => {
+                // When a project is open, only show the active project + its sub-nav
+                // When on the projects list, show all projects
+                const visibleProjects = activeProjectSlug
+                  ? projects.filter((p) => toSlug(p.name) === activeProjectSlug)
+                  : projects
+
+                return visibleProjects.map((p) => {
+                  const href = `/projects/${toSlug(p.name)}`
+                  const isActiveProject = toSlug(p.name) === activeProjectSlug
+                  return (
+                    <div key={p.id}>
+                      {/* Project row */}
+                      <Link
+                        href={href}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors truncate"
+                        style={{
+                          color: isActiveProject ? "var(--nav-active-fg)" : "var(--nav-muted)",
+                          background: isActiveProject ? "var(--nav-active-bg)" : "transparent",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isActiveProject) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActiveProject) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
+                        }}
+                      >
+                        <span className="w-1 h-1 rounded-full shrink-0" style={{ background: isActiveProject ? "var(--nav-active-fg)" : "var(--nav-muted)" }} />
+                        {p.name}
+                      </Link>
+
+                      {/* Sub-nav indented under active project */}
+                      {isActiveProject && (
+                        <div className="mt-0.5 flex flex-col gap-0.5 pl-4">
+                          {PROJECT_NAV.map((item) => {
+                            const subHref = `/projects/${activeProjectSlug}${item.suffix}`
+                            const subActive = pathname === subHref || pathname.startsWith(subHref + "/")
+                            return (
+                              <Link
+                                key={subHref}
+                                href={subHref}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors"
+                                style={{
+                                  color: subActive ? "var(--nav-active-fg)" : "var(--nav-muted)",
+                                  background: subActive ? "var(--nav-active-bg)" : "transparent",
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
+                                }}
+                              >
+                                <span className="shrink-0">{item.icon}</span>
+                                {item.label}
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              })()}
+
+              {/* Create project — only shown when no project is open */}
+              {!activeProjectSlug && (
+                <button
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors"
+                  style={{ color: "var(--nav-muted)" }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)"
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "transparent"
+                  }}
+                >
+                  <Plus size={12} strokeWidth={2.5} />
+                  Create Project
+                </button>
+              )}
             </div>
           )}
         </div>
-
-        {/* Project-scoped sub-nav — only shown when a project is open */}
-        {activeProjectSlug && (
-          <div className="mt-1">
-            {!collapsed && (
-              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest font-sans" style={{ color: "var(--nav-muted)" }}>
-                Current Project
-              </p>
-            )}
-            {PROJECT_NAV.map((item) => {
-              const href = `/projects/${activeProjectSlug}${item.suffix}`
-              return (
-                <NavLink
-                  key={href}
-                  href={href}
-                  icon={item.icon}
-                  label={item.label}
-                  active={pathname === href || pathname.startsWith(href + "/")}
-                  collapsed={collapsed}
-                />
-              )
-            })}
-          </div>
-        )}
       </nav>
 
       {/* Bottom: user + settings */}
