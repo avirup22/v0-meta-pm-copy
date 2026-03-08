@@ -7,8 +7,8 @@ export async function POST(request: NextRequest) {
     console.log("[v0] API: webhook-proxy received:", payload.title)
 
     // Call the n8n webhook from server-side (no CORS issues)
-    const webhookUrl = "https://indegene-sbx.app.n8n.cloud/webhook/momagent"
-    
+    const webhookUrl = "https://indegene-sbx.app.n8n.cloud/webhook-test/momagent"
+
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

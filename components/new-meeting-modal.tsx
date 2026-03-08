@@ -7,11 +7,17 @@ import { sendTranscriptToWebhook, fetchProjectDatabase } from "@/lib/graph"
 
 interface NewMeetingModalProps {
   projectSlug: string
+  projectFolderId: string
   onClose: () => void
   onCreated: (meetingData: any) => void
 }
 
-export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingModalProps) {
+export function NewMeetingModal({ 
+  projectSlug, 
+  projectFolderId, 
+  onClose, 
+  onCreated 
+}: NewMeetingModalProps) {
   const { token } = useAuth()
   const [step, setStep] = useState<"upload" | "details" | "processing" | "response">("upload")
   const [transcript, setTranscript] = useState("")
@@ -21,7 +27,7 @@ export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingM
   
   const [meetingDetails, setMeetingDetails] = useState({
     title: "",
-    date: "",
+    date: new Date().toISOString().split("T")[0], // Today's date in YYYY-MM-DD format
   })
 
   function generateCode(): string {
@@ -57,23 +63,31 @@ export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingM
       const meetingId = `${Date.now()}`
       const code = generateCode()
 
-      // Note: In a real implementation, you'd need to resolve the projectSlug to a projectFolderId
-      // For now, we'll use a placeholder and fetch the project data
-      // This is simplified - you should implement proper slug resolution
-      const projectFolderId = projectSlug // This should be resolved from the database
+      // Convert date from YYYY-MM-DD to dd-mm-yyyy for the webhook
+      const [year, month, day] = meetingDetails.date.split("-")
+      const formattedDate = `${day}-${month}-${year}`
 
-      // Fetch project team data
+      // Fetch project team data (both internal and client)
       const projectData = await fetchProjectDatabase(token, projectFolderId)
-      const projectTeam = projectData.internalTeam.map((member) => ({
-        name: member.Name,
-        email: member.Email,
-        designation: member.Designation,
-      }))
+      const projectTeam = [
+        ...projectData.internalTeam.map((member) => ({
+          name: member.Name,
+          email: member.Email,
+          designation: member.Designation,
+        })),
+        ...projectData.clientTeam.map((member) => ({
+          name: member.Name,
+          email: member.Email,
+          designation: member.Designation,
+        })),
+      ]
+
+      console.log("[v0] Sending to webhook with project_id:", projectFolderId, "and team count:", projectTeam.length)
 
       // Send to webhook
       const response = await sendTranscriptToWebhook({
         title: meetingDetails.title,
-        date: meetingDetails.date,
+        date: formattedDate,
         meeting_id: meetingId,
         code,
         project_id: projectFolderId,
@@ -164,10 +178,9 @@ export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingM
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-foreground font-sans">Meeting Date (dd-mm-yyyy)</label>
+              <label className="text-sm font-semibold text-foreground font-sans">Meeting Date</label>
               <input
-                type="text"
-                placeholder="dd-mm-yyyy"
+                type="date"
                 value={meetingDetails.date}
                 onChange={(e) => setMeetingDetails({ ...meetingDetails, date: e.target.value })}
                 className="px-4 py-2 rounded-lg border border-border bg-background text-foreground font-sans text-sm focus:outline-none focus:ring-2 focus:ring-primary"

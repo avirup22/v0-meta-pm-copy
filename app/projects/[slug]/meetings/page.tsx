@@ -172,6 +172,7 @@ export default function MeetingsListPage({ params }: PageProps) {
   const [activeTab, setActiveTab] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [projectFolderId, setProjectFolderId] = useState<string | null>(null)
   const { token, isAuthenticated } = useAuth()
 
   // Load meetings from Excel database
@@ -184,7 +185,7 @@ export default function MeetingsListPage({ params }: PageProps) {
       
       // Get the project folder ID by matching slug to projects
       const customersWithProjects = await fetchAllCustomersWithProjects(token)
-      let projectFolderId: string | null = null
+      let folderIdFromProjects: string | null = null
       
       for (const { projects } of customersWithProjects) {
         const project = projects.find((p) => {
@@ -192,19 +193,20 @@ export default function MeetingsListPage({ params }: PageProps) {
           return projectSlug === slug
         })
         if (project) {
-          projectFolderId = project.id
+          folderIdFromProjects = project.id
+          setProjectFolderId(project.id)
           break
         }
       }
       
-      if (!projectFolderId) {
+      if (!folderIdFromProjects) {
         setMeetings([])
         setLoading(false)
         return
       }
       
       // Fetch meeting data from Excel
-      const db = await fetchMeetingDatabase(token, projectFolderId)
+      const db = await fetchMeetingDatabase(token, folderIdFromProjects)
       
       // Transform Excel data into MeetingRecords
       const records: MeetingRecord[] = db.meetings.map((m) => {
@@ -352,9 +354,10 @@ export default function MeetingsListPage({ params }: PageProps) {
       </div>
 
       {/* New Meeting Modal */}
-      {showModal && (
+      {showModal && projectFolderId && (
         <NewMeetingModal
           projectSlug={slug}
+          projectFolderId={projectFolderId}
           onClose={() => setShowModal(false)}
           onCreated={handleMeetingCreated}
         />
