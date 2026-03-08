@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { fetchProjectFolders, type DriveItem } from "@/lib/graph"
+import { fetchAllCustomersWithProjects, type CustomerWithProjects } from "@/lib/graph"
 import {
   Home,
   FolderOpen,
@@ -20,6 +20,7 @@ import {
   LogOut,
   Plus,
   Loader2,
+  Building2,
 } from "lucide-react"
 
 function toSlug(name: string) {
@@ -45,8 +46,8 @@ export function AppSidebar() {
   const router = useRouter()
 
   const [collapsed, setCollapsed] = useState(false)
-  const [projectsOpen, setProjectsOpen] = useState(true)
-  const [projects, setProjects] = useState<DriveItem[]>([])
+  const [customers, setCustomers] = useState<CustomerWithProjects[]>([])
+  const [openCustomers, setOpenCustomers] = useState<Set<string>>(new Set())
   const [loadingProjects, setLoadingProjects] = useState(false)
 
   // Don't render on the login page
@@ -57,13 +58,22 @@ export function AppSidebar() {
   const projectSlugMatch = pathname.match(/^\/projects\/([^/]+)/)
   const activeProjectSlug = projectSlugMatch ? projectSlugMatch[1] : null
 
-  // Load projects for the sidebar list
+  // Auto-expand the customer that owns the active project
+  const activeCustomer = activeProjectSlug
+    ? customers.find((c) => c.projects.some((p) => toSlug(p.name) === activeProjectSlug))
+    : null
+
+  // Load customers + projects for the sidebar
   const loadProjects = useCallback(async () => {
     if (!token) return
     setLoadingProjects(true)
     try {
-      const folders = await fetchProjectFolders(token)
-      setProjects(folders)
+      const data = await fetchAllCustomersWithProjects(token)
+      setCustomers(data)
+      // Auto-open the first customer if none open yet
+      if (data.length > 0) {
+        setOpenCustomers(new Set([data[0].customer.id]))
+      }
     } catch {
       // silently fail in sidebar
     } finally {
@@ -74,6 +84,22 @@ export function AppSidebar() {
   useEffect(() => {
     if (isAuthenticated) loadProjects()
   }, [isAuthenticated, loadProjects])
+
+  // When active project changes, ensure its customer is expanded
+  useEffect(() => {
+    if (activeCustomer) {
+      setOpenCustomers((prev) => new Set([...prev, activeCustomer.customer.id]))
+    }
+  }, [activeCustomer])
+
+  function toggleCustomer(id: string) {
+    setOpenCustomers((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   function handleLogout() {
     logout()
@@ -118,145 +144,150 @@ export function AppSidebar() {
         {/* Home */}
         <NavLink href="/projects" icon={<Home size={16} strokeWidth={1.8} />} label="Home" active={pathname === "/projects"} collapsed={collapsed} />
 
-        {/* Projects section */}
-        <div>
-          <button
-            onClick={() => !collapsed && setProjectsOpen((o) => !o)}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-sans font-medium transition-colors"
-            style={{
-              color: isActive("/projects") ? "var(--nav-active-fg)" : "var(--nav-fg)",
-              background: isActive("/projects") ? "var(--nav-active-bg)" : "transparent",
-            }}
-            onMouseEnter={(e) => {
-              if (!isActive("/projects")) {
-                (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)"
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isActive("/projects")) {
-                (e.currentTarget as HTMLButtonElement).style.background = "transparent"
-              }
-            }}
-            aria-expanded={projectsOpen}
-          >
-            <span className="shrink-0"><FolderOpen size={16} strokeWidth={1.8} /></span>
-            {!collapsed && (
-              <>
-                <span className="flex-1 text-left truncate">Projects</span>
-                <ChevronDown
-                  size={14}
-                  className="shrink-0 transition-transform duration-200"
-                  style={{ transform: projectsOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
-                />
-              </>
+        {/* Projects header link */}
+        <NavLink href="/projects" icon={<FolderOpen size={16} strokeWidth={1.8} />} label="Projects" active={pathname === "/projects"} collapsed={collapsed} />
+
+        {/* Customer → Project hierarchy */}
+        {!collapsed && (
+          <div className="flex flex-col gap-0.5 pl-2">
+            {loadingProjects && (
+              <div className="flex items-center gap-2 px-3 py-1.5">
+                <Loader2 size={12} className="animate-spin" style={{ color: "var(--nav-muted)" }} />
+                <span className="text-xs font-sans" style={{ color: "var(--nav-muted)" }}>Loading...</span>
+              </div>
             )}
-          </button>
 
-          {/* Project list */}
-          {!collapsed && projectsOpen && (
-            <div className="mt-0.5 flex flex-col gap-0.5 pl-3">
-              {loadingProjects && (
-                <div className="flex items-center gap-2 px-3 py-1.5">
-                  <Loader2 size={12} className="animate-spin" style={{ color: "var(--nav-muted)" }} />
-                  <span className="text-xs font-sans" style={{ color: "var(--nav-muted)" }}>Loading...</span>
-                </div>
-              )}
+            {!loadingProjects && customers.map((c) => {
+              const isCustomerOpen = openCustomers.has(c.customer.id)
+              const hasActiveProject = c.projects.some((p) => toSlug(p.name) === activeProjectSlug)
 
-              {!loadingProjects && projects.map((p) => {
-                const slug = toSlug(p.name)
-                const href = `/projects/${slug}`
-                const isOpen = slug === activeProjectSlug
+              return (
+                <div key={c.customer.id}>
+                  {/* Customer row */}
+                  <button
+                    onClick={() => toggleCustomer(c.customer.id)}
+                    className="w-full flex items-center gap-2 pl-2 pr-1.5 py-1.5 rounded-lg text-xs font-sans font-medium transition-colors"
+                    style={{
+                      color: hasActiveProject ? "var(--nav-fg)" : "var(--nav-muted)",
+                      background: hasActiveProject ? "var(--nav-hover-bg)" : "transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)"
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!hasActiveProject) (e.currentTarget as HTMLButtonElement).style.background = "transparent"
+                    }}
+                  >
+                    <Building2 size={13} strokeWidth={1.8} className="shrink-0" />
+                    <span className="flex-1 text-left truncate">{c.customer.name}</span>
+                    <ChevronDown
+                      size={11}
+                      strokeWidth={2.5}
+                      className="shrink-0 transition-transform duration-200"
+                      style={{ transform: isCustomerOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
+                    />
+                  </button>
 
-                return (
-                  <div key={p.id}>
-                    {/* Project row: navigate + toggle dropdown */}
-                    <div className="flex items-center rounded-lg overflow-hidden">
-                      <Link
-                        href={href}
-                        className="flex items-center gap-2 flex-1 pl-2 pr-1 py-1.5 text-xs font-sans transition-colors truncate"
-                        style={{
-                          color: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)",
-                          background: isOpen ? "var(--nav-active-bg)" : "transparent",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isOpen) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isOpen) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
-                        }}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ background: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)" }}
-                        />
-                        <span className="truncate">{p.name}</span>
-                      </Link>
-                      {/* Chevron toggle — expands/collapses sub-nav without navigating */}
+                  {/* Projects under this customer */}
+                  {isCustomerOpen && (
+                    <div className="flex flex-col gap-0.5 pl-4 mt-0.5">
+                      {c.projects.map((p) => {
+                        const slug = toSlug(p.name)
+                        const href = `/projects/${slug}`
+                        const isOpen = slug === activeProjectSlug
+
+                        return (
+                          <div key={p.id}>
+                            {/* Project row */}
+                            <div className="flex items-center rounded-lg">
+                              <Link
+                                href={href}
+                                className="flex items-center gap-2 flex-1 pl-2 pr-1 py-1.5 text-xs font-sans transition-colors truncate rounded-l-lg"
+                                style={{
+                                  color: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)",
+                                  background: isOpen ? "var(--nav-active-bg)" : "transparent",
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isOpen) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isOpen) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
+                                }}
+                              >
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                                  style={{ background: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)" }}
+                                />
+                                <span className="truncate">{p.name}</span>
+                              </Link>
+                              <button
+                                onClick={() => router.push(href)}
+                                className="shrink-0 p-1.5 rounded-r-lg transition-colors"
+                                style={{
+                                  color: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)",
+                                  background: isOpen ? "var(--nav-active-bg)" : "transparent",
+                                }}
+                                aria-label={isOpen ? "Collapse project" : "Expand project"}
+                              >
+                                <ChevronDown
+                                  size={11}
+                                  strokeWidth={2.5}
+                                  className="transition-transform duration-200"
+                                  style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
+                                />
+                              </button>
+                            </div>
+
+                            {/* Project sub-nav */}
+                            {isOpen && (
+                              <div className="flex flex-col gap-0.5 pl-4 mt-0.5 mb-1">
+                                {PROJECT_NAV.map((item) => {
+                                  const subHref = `/projects/${slug}${item.suffix}`
+                                  const subActive = pathname === subHref || pathname.startsWith(subHref + "/")
+                                  return (
+                                    <Link
+                                      key={subHref}
+                                      href={subHref}
+                                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-sans transition-colors"
+                                      style={{
+                                        color: subActive ? "var(--nav-active-fg)" : "var(--nav-muted)",
+                                        background: subActive ? "var(--nav-active-bg)" : "transparent",
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
+                                      }}
+                                    >
+                                      <span className="shrink-0">{item.icon}</span>
+                                      {item.label}
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+
+                      {/* Create Project under this customer */}
                       <button
-                        onClick={() => router.push(href)}
-                        className="shrink-0 p-1.5 rounded transition-colors"
-                        style={{ color: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)" }}
-                        aria-label={isOpen ? "Collapse project" : "Expand project"}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-sans transition-colors"
+                        style={{ color: "var(--nav-muted)" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)" }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent" }}
                       >
-                        <ChevronDown
-                          size={12}
-                          strokeWidth={2.5}
-                          className="transition-transform duration-200"
-                          style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
-                        />
+                        <Plus size={11} strokeWidth={2.5} />
+                        New Project
                       </button>
                     </div>
-
-                    {/* Sub-nav — only for the active/open project */}
-                    {isOpen && (
-                      <div className="mt-0.5 mb-1 flex flex-col gap-0.5 pl-5">
-                        {PROJECT_NAV.map((item) => {
-                          const subHref = `/projects/${slug}${item.suffix}`
-                          const subActive = pathname === subHref || pathname.startsWith(subHref + "/")
-                          return (
-                            <Link
-                              key={subHref}
-                              href={subHref}
-                              className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-sans transition-colors"
-                              style={{
-                                color: subActive ? "var(--nav-active-fg)" : "var(--nav-muted)",
-                                background: subActive ? "var(--nav-active-bg)" : "transparent",
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
-                              }}
-                            >
-                              <span className="shrink-0">{item.icon}</span>
-                              {item.label}
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {/* Create project */}
-              <button
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-sans transition-colors mt-0.5"
-                style={{ color: "var(--nav-muted)" }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)"
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "transparent"
-                }}
-              >
-                <Plus size={12} strokeWidth={2.5} />
-                Create Project
-              </button>
-            </div>
-          )}
-        </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </nav>
 
       {/* Bottom: user + settings */}

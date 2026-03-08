@@ -14,6 +14,8 @@ export interface DriveItem {
   driveId?: string
   /** SharePoint site hostname e.g. https://indegene123-my.sharepoint.com/personal/sarvesh_koyande_indegene_com */
   siteUrl?: string
+  /** Customer/organisation folder name this project belongs to (e.g. "Internal", "Pfizer") */
+  customerName?: string
 }
 
 export interface RecordingsResult {
@@ -183,34 +185,69 @@ export async function fetchRecordingFiles(token: string): Promise<RecordingsResu
   return { files, driveId, siteUrl }
 }
 
+export interface CustomerWithProjects {
+  customer: DriveItem
+  projects: DriveItem[]
+}
+
 /**
- * Walk the full path MetaPM → Projects and return the folder items inside Projects.
+ * Fetch all customer folders directly under MetaPM.
+ * New structure: MetaPM / <Customer> / <Project>
+ */
+export async function fetchCustomerFolders(token: string): Promise<DriveItem[]> {
+  console.log("[v0] fetchCustomerFolders: starting")
+  const metaPMFolder = await getDriveItemByPath(token, "MetaPM")
+  console.log("[v0] fetchCustomerFolders: MetaPM id:", metaPMFolder.id)
+  const customers = await listFolderChildren(token, metaPMFolder.id)
+  console.log("[v0] fetchCustomerFolders: found customers:", customers.map((c) => c.name))
+  return customers
+}
+
+/**
+ * Fetch all projects under a specific customer folder.
+ * Path: MetaPM / <customerName> / <Project>
+ */
+export async function fetchProjectsForCustomer(
+  token: string,
+  customerFolderId: string
+): Promise<DriveItem[]> {
+  const projects = await listFolderChildren(token, customerFolderId)
+  console.log("[v0] fetchProjectsForCustomer: found", projects.length, "projects")
+  return projects
+}
+
+/**
+ * Fetch ALL customers and their projects in one call.
+ * Returns an array of { customer, projects[] }.
+ */
+export async function fetchAllCustomersWithProjects(
+  token: string
+): Promise<CustomerWithProjects[]> {
+  console.log("[v0] fetchAllCustomersWithProjects: starting")
+  const customers = await fetchCustomerFolders(token)
+  const results = await Promise.all(
+    customers.map(async (customer) => {
+      const projects = await fetchProjectsForCustomer(token, customer.id)
+      return { customer, projects }
+    })
+  )
+  console.log(
+    "[v0] fetchAllCustomersWithProjects:",
+    results.map((r) => `${r.customer.name}(${r.projects.length} projects)`)
+  )
+  return results
+}
+
+/**
+ * Legacy: flat list of all projects across all customers (used by sidebar flat list).
+ * Walk MetaPM → each Customer → list their project folders.
  */
 export async function fetchProjectFolders(token: string): Promise<DriveItem[]> {
-  console.log("[v0] fetchProjectFolders: starting folder walk")
-
-  // Step 1 – get MetaPM folder
-  const metaPMFolder = await getDriveItemByPath(token, "MetaPM")
-  console.log("[v0] Step 1 complete – MetaPM id:", metaPMFolder.id)
-
-  // Step 2 – list children of MetaPM, find Projects
-  const metaPMChildren = await listFolderChildren(token, metaPMFolder.id)
-  const projectsFolder = metaPMChildren.find(
-    (f) => f.name.toLowerCase() === "projects"
+  console.log("[v0] fetchProjectFolders: fetching flat list (new structure)")
+  const customersWithProjects = await fetchAllCustomersWithProjects(token)
+  const allProjects = customersWithProjects.flatMap((c) =>
+    c.projects.map((p) => ({ ...p, customerName: c.customer.name }))
   )
-
-  if (!projectsFolder) {
-    console.error('[v0] "Projects" folder not found inside MetaPM')
-    throw new Error('"Projects" folder not found inside MetaPM')
-  }
-  console.log("[v0] Step 2 complete – Projects id:", projectsFolder.id)
-
-  // Step 3 – list children of Projects
-  const projectFolders = await listFolderChildren(token, projectsFolder.id)
-  console.log(
-    "[v0] Step 3 complete – project folders:",
-    projectFolders.map((f) => f.name)
-  )
-
-  return projectFolders
+  console.log("[v0] fetchProjectFolders: total projects:", allProjects.length)
+  return allProjects
 }
