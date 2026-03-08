@@ -339,15 +339,82 @@ export async function fetchAllCustomersWithProjects(
 }
 
 /**
- * Legacy: flat list of all projects across all customers (used by sidebar flat list).
- * Walk MetaPM → each Customer → list their project folders.
+ * Create a new folder inside a parent folder and return its ID.
  */
-export async function fetchProjectFolders(token: string): Promise<DriveItem[]> {
-  console.log("[v0] fetchProjectFolders: fetching flat list (new structure)")
-  const customersWithProjects = await fetchAllCustomersWithProjects(token)
-  const allProjects = customersWithProjects.flatMap((c) =>
-    c.projects.map((p) => ({ ...p, customerName: c.customer.name }))
-  )
-  console.log("[v0] fetchProjectFolders: total projects:", allProjects.length)
-  return allProjects
+export async function createFolder(
+  token: string,
+  parentFolderId: string,
+  folderName: string
+): Promise<string> {
+  const url = `${GRAPH_BASE}/me/drive/items/${parentFolderId}/children`
+  const body = {
+    name: folderName,
+    folder: {},
+    "@microsoft.graph.conflictBehavior": "rename",
+  }
+  console.log("[v0] createFolder:", folderName, "in", parentFolderId)
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+  const data: DriveItem = await res.json()
+  console.log("[v0] createFolder: created", data.name, "id:", data.id)
+  return data.id
+}
+
+/**
+ * Add a row to the "projects" worksheet in database.xlsx.
+ */
+export async function insertProjectRow(token: string, row: ProjectRow): Promise<void> {
+  const fileId = await findDatabaseFile(token)
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/projects/tables/projects/rows/add`
+  const values = [
+    [row.Client_Name, row.Project_Name, row.Project_folder_ID, row.Project_Manager, row.Start_Date, row.End_date, row.Project_status, row.Project_Type],
+  ]
+  console.log("[v0] insertProjectRow:", row.Project_Name)
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+  console.log("[v0] insertProjectRow: success")
+}
+
+/**
+ * Add rows to the "internal_team" worksheet.
+ */
+export async function insertTeamRows(token: string, rows: TeamMemberRow[], sheet: "internal_team" | "client_team"): Promise<void> {
+  if (rows.length === 0) return
+  const fileId = await findDatabaseFile(token)
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/tables/${sheet}/rows/add`
+  const values = rows.map((r) => [r.Project_folder_ID, r.Name, r.Email, r.Designation])
+  console.log("[v0] insertTeamRows to", sheet, ":", rows.length, "rows")
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+  console.log("[v0] insertTeamRows: success")
 }

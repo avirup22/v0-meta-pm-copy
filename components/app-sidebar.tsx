@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { fetchAllCustomersWithProjects, type CustomerWithProjects } from "@/lib/graph"
+import { NewProjectModal } from "@/components/new-project-modal"
 import {
   Home,
   FolderOpen,
@@ -52,6 +53,8 @@ export function AppSidebar() {
   // Project sub-nav open state (independent of navigation)
   const [openProjectSlug, setOpenProjectSlug] = useState<string | null>(null)
   const [loadingProjects, setLoadingProjects] = useState(false)
+  // New project modal state
+  const [newProjectModal, setNewProjectModal] = useState<{ open: boolean; customerId: string; customerName: string } | null>(null)
 
   // Don't render on the login page
   if (pathname === "/") return null
@@ -273,6 +276,7 @@ export function AppSidebar() {
 
                       {/* Create Project under this customer */}
                       <button
+                        onClick={() => setNewProjectModal({ open: true, customerId: c.customer.id, customerName: c.customer.name })}
                         className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-sans transition-colors"
                         style={{ color: "var(--nav-muted)" }}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)" }}
@@ -289,6 +293,20 @@ export function AppSidebar() {
           </div>
         )}
       </nav>
+
+      {/* New Project Modal */}
+      {newProjectModal && (
+        <NewProjectModal
+          open={newProjectModal.open}
+          onClose={() => setNewProjectModal(null)}
+          customerFolderId={newProjectModal.customerId}
+          customerName={newProjectModal.customerName}
+          onProjectCreated={() => {
+            loadProjects()
+            setNewProjectModal(null)
+          }}
+        />
+      )}
 
       {/* Bottom: user + settings */}
       <div className="shrink-0 py-3 px-2 flex flex-col gap-0.5" style={{ borderTop: "1px solid var(--nav-border)" }}>
