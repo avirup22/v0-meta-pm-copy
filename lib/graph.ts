@@ -507,7 +507,7 @@ export async function replaceTeamRows(
 
   // 3. Combine: kept rows + new deduped members
   const allDataToInsert = [...rowsToKeep, ...deduped]
-  console.log("[v0] replaceTeamRows: total rows to save:', allDataToInsert.length)
+  console.log("[v0] replaceTeamRows: total rows to save:", allDataToInsert.length)
 
   // 4. Delete entire sheet content (except header)
   if (allRows.length > 0) {
@@ -515,7 +515,7 @@ export async function replaceTeamRows(
     const endRow = allRows.length + 1
     const deleteUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/range(address='A${startRow}:D${endRow}')`
     
-    console.log("[v0] replaceTeamRows: clearing sheet rows', startRow, '-', endRow)
+    console.log("[v0] replaceTeamRows: clearing sheet rows", startRow, "-", endRow)
     const deleteRes = await fetch(deleteUrl, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
