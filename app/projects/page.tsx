@@ -17,9 +17,5 @@ export default function ProjectsPage() {
 
   if (!isAuthenticated) return null
 
-  return (
-    <div className="min-h-[calc(100vh-4rem)] bg-background">
-      <ProjectGrid />
-    </div>
-  )
+  return <ProjectGrid />
 }

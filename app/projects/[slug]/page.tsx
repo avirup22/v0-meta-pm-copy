@@ -45,8 +45,7 @@ export default function ProjectPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="max-w-6xl mx-auto px-8 py-10 flex flex-col gap-8">
+    <div className="px-8 py-10 flex flex-col gap-8 max-w-6xl mx-auto">
         {/* Back link */}
         <Link
           href="/projects"
@@ -137,7 +136,6 @@ export default function ProjectPage({ params }: PageProps) {
           {/* Transcript Panel */}
           <TranscriptPanel projectName={projectName} userName={displayName ?? "User"} />
         </div>
-      </main>
     </div>
   )
 }

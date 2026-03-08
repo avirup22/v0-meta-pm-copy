@@ -30,6 +30,15 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.75rem;
   --brand-teal: oklch(0.38 0.09 200);
+  /* Navigation sidebar tokens */
+  --nav-bg: oklch(0.24 0.08 240);
+  --nav-fg: oklch(0.82 0.03 240);
+  --nav-muted: oklch(0.58 0.04 240);
+  --nav-border: oklch(0.30 0.06 240);
+  --nav-hover-bg: oklch(0.30 0.08 240);
+  --nav-active-bg: oklch(0.42 0.14 240);
+  --nav-active-fg: oklch(1 0 0);
+  --nav-logo: oklch(0.88 0.04 200);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
