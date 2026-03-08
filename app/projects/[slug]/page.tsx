@@ -619,36 +619,5 @@ export default function ProjectPage({ params }: PageProps) {
         />
       )}
     </div>
-        </div>
-      )}
-
-      {editModal === "internal-team" && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-card rounded-xl border border-border max-w-md w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4">
-            <h2 className="text-lg font-semibold text-foreground font-sans">Edit Internal Team</h2>
-            <button
-              onClick={() => setEditModal(null)}
-              className="text-xs text-primary hover:text-primary/80 font-sans mt-auto"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {editModal === "client-team" && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-card rounded-xl border border-border max-w-md w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4">
-            <h2 className="text-lg font-semibold text-foreground font-sans">Edit Client Team</h2>
-            <button
-              onClick={() => setEditModal(null)}
-              className="text-xs text-primary hover:text-primary/80 font-sans mt-auto"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
   )
 }
