@@ -26,23 +26,17 @@ function toSlug(name: string) {
   return name.toLowerCase().replace(/\s+/g, "-")
 }
 
-interface NavItem {
-  label: string
-  href: string
-  icon: React.ReactNode
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { label: "Home",          href: "/projects",        icon: <Home      size={16} strokeWidth={1.8} /> },
-  { label: "Meetings",      href: "/meetings",        icon: <CalendarDays size={16} strokeWidth={1.8} /> },
-  { label: "Tasks",         href: "/tasks",           icon: <CheckSquare  size={16} strokeWidth={1.8} /> },
-  { label: "Documents",     href: "/documents",       icon: <FileText     size={16} strokeWidth={1.8} /> },
-  { label: "PM Tools",      href: "/pm-tools",        icon: <Wrench       size={16} strokeWidth={1.8} /> },
+// Sub-nav items only shown when a project is open
+const PROJECT_NAV = [
+  { label: "Meetings",  suffix: "/meetings",  icon: <CalendarDays size={16} strokeWidth={1.8} /> },
+  { label: "Tasks",     suffix: "/tasks",     icon: <CheckSquare  size={16} strokeWidth={1.8} /> },
+  { label: "Documents", suffix: "/documents", icon: <FileText     size={16} strokeWidth={1.8} /> },
+  { label: "PM Tools",  suffix: "/pm-tools",  icon: <Wrench       size={16} strokeWidth={1.8} /> },
 ]
 
-const BOTTOM_ITEMS: NavItem[] = [
-  { label: "Notifications", href: "/notifications",   icon: <Bell         size={16} strokeWidth={1.8} /> },
-  { label: "Settings",      href: "/settings",        icon: <Settings     size={16} strokeWidth={1.8} /> },
+const BOTTOM_ITEMS = [
+  { label: "Notifications", href: "/notifications", icon: <Bell     size={16} strokeWidth={1.8} /> },
+  { label: "Settings",      href: "/settings",      icon: <Settings size={16} strokeWidth={1.8} /> },
 ]
 
 export function AppSidebar() {
@@ -58,6 +52,10 @@ export function AppSidebar() {
   // Don't render on the login page
   if (pathname === "/") return null
   if (!isAuthenticated) return null
+
+  // Detect if a specific project is open: /projects/[slug] or /projects/[slug]/...
+  const projectSlugMatch = pathname.match(/^\/projects\/([^/]+)/)
+  const activeProjectSlug = projectSlugMatch ? projectSlugMatch[1] : null
 
   // Load projects for the sidebar list
   const loadProjects = useCallback(async () => {
@@ -205,10 +203,29 @@ export function AppSidebar() {
           )}
         </div>
 
-        {/* Other nav items */}
-        {NAV_ITEMS.slice(1).map((item) => (
-          <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} collapsed={collapsed} />
-        ))}
+        {/* Project-scoped sub-nav — only shown when a project is open */}
+        {activeProjectSlug && (
+          <div className="mt-1">
+            {!collapsed && (
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest font-sans" style={{ color: "var(--nav-muted)" }}>
+                Current Project
+              </p>
+            )}
+            {PROJECT_NAV.map((item) => {
+              const href = `/projects/${activeProjectSlug}${item.suffix}`
+              return (
+                <NavLink
+                  key={href}
+                  href={href}
+                  icon={item.icon}
+                  label={item.label}
+                  active={pathname === href || pathname.startsWith(href + "/")}
+                  collapsed={collapsed}
+                />
+              )
+            })}
+          </div>
+        )}
       </nav>
 
       {/* Bottom: user + settings */}
