@@ -623,3 +623,36 @@ export async function fetchMeetingDatabase(
   
   return { meetings, attendees, decisions, actions, risks, discussions }
 }
+
+/**
+ * Send transcript and meeting data to the webhook for processing.
+ */
+export async function sendTranscriptToWebhook(payload: {
+  title: string
+  date: string
+  meeting_id: string
+  code: string
+  project_id: string
+  project_team: Array<{ name: string; email: string; designation: string }>
+  transcript: string
+}): Promise<any> {
+  const webhookUrl = "https://indegene-sbx.app.n8n.cloud/webhook-test/momagent"
+  
+  console.log("[v0] sendTranscriptToWebhook:", payload.title)
+  
+  const res = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+  
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message ?? `HTTP ${res.status}`)
+  }
+  
+  const data = await res.json()
+  console.log("[v0] sendTranscriptToWebhook response:", data)
+  return data
+}
+

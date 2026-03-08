@@ -7,8 +7,10 @@ import { useAuth } from "@/contexts/auth-context"
 import {
   fetchAllCustomersWithProjects,
   fetchMeetingDatabase,
+  sendTranscriptToWebhook,
   type MeetingDatabase,
 } from "@/lib/graph"
+import { NewMeetingModal } from "@/components/new-meeting-modal"
 import {
   CalendarDays,
   CheckSquare,
@@ -433,100 +435,98 @@ export default function MeetingsListPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null)
   const { token, isAuthenticated } = useAuth()
 
+  // Load meetings from Excel database
+  const loadMeetingsFromDB = async () => {
+    if (!token || !isAuthenticated) return
+    
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // Get the project folder ID by matching slug to projects
+      const customersWithProjects = await fetchAllCustomersWithProjects(token)
+      let projectFolderId: string | null = null
+      
+      for (const { projects } of customersWithProjects) {
+        const project = projects.find((p) => {
+          const projectSlug = p.name.toLowerCase().replace(/\s+/g, "-")
+          return projectSlug === slug
+        })
+        if (project) {
+          projectFolderId = project.id
+          break
+        }
+      }
+      
+      if (!projectFolderId) {
+        setMeetings([])
+        setLoading(false)
+        return
+      }
+      
+      // Fetch meeting data from Excel
+      const db = await fetchMeetingDatabase(token, projectFolderId)
+      
+      // Transform Excel data into MeetingRecords
+      const records: MeetingRecord[] = db.meetings.map((m) => {
+        const attendeeCount = db.attendees.filter((a) => a.Meeting_ID === m.Meeting_ID).length
+        const taskCount = db.actions.filter((a) => a.Meeting_ID === m.Meeting_ID).length
+        const decisionCount = db.decisions.filter((d) => d.Meeting_ID === m.Meeting_ID).length
+        const riskCount = db.risks.filter((r) => r.Meeting_ID === m.Meeting_ID).length
+        
+        // Format date from dd-mm-yyyy to display format
+        let displayDate = m.Meeting_date
+        try {
+          const dateStr = m.Meeting_date.includes("-") ? m.Meeting_date : ""
+          if (dateStr) {
+            const d = new Date(dateStr)
+            if (!isNaN(d.getTime())) {
+              const monthName = d.toLocaleString("default", { month: "long" })
+              displayDate = `${monthName} ${d.getDate()}`
+            }
+          }
+        } catch (e) {
+          // Keep original if parse fails
+        }
+        
+        return {
+          id: m.Meeting_ID,
+          title: m.Meeting_title,
+          date: m.Meeting_date,
+          displayDate,
+          organizer: m.Organizer,
+          participants: attendeeCount,
+          taskCount,
+          decisionCount,
+          riskCount,
+        }
+      })
+      
+      setMeetings(records)
+    } catch (err) {
+      console.error("[v0] Failed to load meetings:", err)
+      setError(err instanceof Error ? err.message : "Failed to load meetings")
+      setMeetings([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMeetingCreated = async (webhookResponse: any) => {
+    // Reload meetings after processing
+    await loadMeetingsFromDB()
+    console.log("[v0] Meeting created with webhook response:", webhookResponse)
+  }
+
   useEffect(() => {
     if (!isAuthenticated) router.replace("/")
   }, [isAuthenticated, router])
 
-  // Load meetings from Excel database
   useEffect(() => {
-    async function loadMeetingsFromDB() {
-      if (!token || !isAuthenticated) return
-      
-      try {
-        setLoading(true)
-        setError(null)
-        
-        // Get the project folder ID by matching slug to projects
-        const customersWithProjects = await fetchAllCustomersWithProjects(token)
-        let projectFolderId: string | null = null
-        
-        for (const { projects } of customersWithProjects) {
-          const project = projects.find((p) => {
-            const projectSlug = p.name.toLowerCase().replace(/\s+/g, "-")
-            return projectSlug === slug
-          })
-          if (project) {
-            projectFolderId = project.id
-            break
-          }
-        }
-        
-        if (!projectFolderId) {
-          setMeetings([])
-          setLoading(false)
-          return
-        }
-        
-        // Fetch meeting data from Excel
-        const db = await fetchMeetingDatabase(token, projectFolderId)
-        
-        // Transform Excel data into MeetingRecords
-        const records: MeetingRecord[] = db.meetings.map((m) => {
-          const attendeeCount = db.attendees.filter((a) => a.Meeting_ID === m.Meeting_ID).length
-          const taskCount = db.actions.filter((a) => a.Meeting_ID === m.Meeting_ID).length
-          const decisionCount = db.decisions.filter((d) => d.Meeting_ID === m.Meeting_ID).length
-          const riskCount = db.risks.filter((r) => r.Meeting_ID === m.Meeting_ID).length
-          
-          // Format date from dd-mm-yyyy to display format
-          let displayDate = m.Meeting_date
-          try {
-            const dateStr = m.Meeting_date.includes("-") ? m.Meeting_date : ""
-            if (dateStr) {
-              const d = new Date(dateStr)
-              if (!isNaN(d.getTime())) {
-                const monthName = d.toLocaleString("default", { month: "long" })
-                displayDate = `${monthName} ${d.getDate()}`
-              }
-            }
-          } catch (e) {
-            // Keep original if parse fails
-          }
-          
-          return {
-            id: m.Meeting_ID,
-            title: m.Meeting_title,
-            date: m.Meeting_date,
-            displayDate,
-            organizer: m.Organizer,
-            participants: attendeeCount,
-            taskCount,
-            decisionCount,
-            riskCount,
-          }
-        })
-        
-        setMeetings(records)
-      } catch (err) {
-        console.error("[v0] Failed to load meetings:", err)
-        setError(err instanceof Error ? err.message : "Failed to load meetings")
-        setMeetings([])
-      } finally {
-        setLoading(false)
-      }
-    }
-    
     loadMeetingsFromDB()
   }, [slug, token, isAuthenticated])
 
   if (!isAuthenticated) return null
-
-  function handleMeetingCreated(meeting: MeetingRecord) {
-    const updated = [meeting, ...meetings]
-    setMeetings(updated)
-    saveMeetings(slug, updated)
-    setShowModal(false)
-    router.push(`/projects/${slug}/meetings/${meeting.id}`)
-  }
 
   const tabs = ["Meetings", "Generated Tasks", "Decisions", "Notes"]
 
