@@ -418,3 +418,52 @@ export async function insertTeamRows(token: string, rows: TeamMemberRow[], sheet
   }
   console.log("[v0] insertTeamRows: success")
 }
+
+/**
+ * Update a row in the "projects" worksheet by Project_folder_ID.
+ * Note: Excel table row updates are limited — we'll need to use the range API to update.
+ */
+export async function updateExcelRow(token: string, sheet: string, projectFolderId: string, updates: Partial<ProjectRow>): Promise<void> {
+  const fileId = await findDatabaseFile(token)
+  
+  // Get all rows to find the target row
+  const allRows = await readWorksheet<ProjectRow>(token, fileId, sheet)
+  const rowIndex = allRows.findIndex((r) => r.Project_folder_ID === projectFolderId)
+  
+  if (rowIndex === -1) {
+    throw new Error(`Project with folder ID ${projectFolderId} not found in ${sheet} sheet`)
+  }
+  
+  // Row index in the sheet (1-based, accounting for header)
+  const excelRowNum = rowIndex + 2
+  
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/range(address='A${excelRowNum}:H${excelRowNum}')`
+  
+  const values = [[
+    updates.Client_Name ?? "",
+    updates.Project_Name ?? "",
+    updates.Project_folder_ID ?? projectFolderId,
+    updates.Project_Manager ?? "",
+    updates.Start_Date ?? "",
+    updates.End_date ?? "",
+    updates.Project_status ?? "",
+    updates.Project_Type ?? "",
+  ]]
+  
+  console.log("[v0] updateExcelRow:", sheet, "row", excelRowNum)
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  })
+  
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+  
+  console.log("[v0] updateExcelRow: success")
+}

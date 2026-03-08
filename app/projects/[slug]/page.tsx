@@ -26,6 +26,8 @@ import {
   fetchProjectDatabase,
   type ProjectDatabase,
 } from "@/lib/graph"
+import { EditProjectModal } from "@/components/edit-project-modal"
+import { EditTeamModal } from "@/components/edit-team-modal"
 
 // ─── Webhook URLs (commented out — to be wired up from meetings page)
 // const WEBHOOK_TRANSCRIPT = "https://indegene-sbx.app.n8n.cloud/webhook/meta-pm"
@@ -586,17 +588,37 @@ export default function ProjectPage({ params }: PageProps) {
       )}
 
       {/* Edit Modals */}
-      {editModal === "project" && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-card rounded-xl border border-border max-w-md w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4">
-            <h2 className="text-lg font-semibold text-foreground font-sans">Edit Project Details</h2>
-            <button
-              onClick={() => setEditModal(null)}
-              className="text-xs text-primary hover:text-primary/80 font-sans mt-auto"
-            >
-              Close
-            </button>
-          </div>
+      {editModal === "project" && proj && (
+        <EditProjectModal
+          project={proj}
+          folderId={folderId!}
+          onClose={() => setEditModal(null)}
+          onSave={loadData}
+        />
+      )}
+
+      {editModal === "internal-team" && folderId && (
+        <EditTeamModal
+          title="Edit Internal Team"
+          folderId={folderId}
+          team={internalTeam}
+          sheet="internal_team"
+          onClose={() => setEditModal(null)}
+          onSave={loadData}
+        />
+      )}
+
+      {editModal === "client-team" && folderId && (
+        <EditTeamModal
+          title="Edit Client Team"
+          folderId={folderId}
+          team={clientTeam}
+          sheet="client_team"
+          onClose={() => setEditModal(null)}
+          onSave={loadData}
+        />
+      )}
+    </div>
         </div>
       )}
 
