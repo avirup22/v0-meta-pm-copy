@@ -488,7 +488,7 @@ export async function replaceTeamRows(
 
   // 2. Keep rows that are NOT for this project
   const rowsToKeep = allRows.filter((r) => r.Project_folder_ID !== projectFolderId)
-  console.log("[v0] replaceTeamRows: keeping', rowsToKeep.length, "rows from other projects")
+  console.log("[v0] replaceTeamRows: keeping", rowsToKeep.length, "rows from other projects")
 
   // 3. De-duplicate incoming members by Email (keep only first of each email)
   const memberMap = new Map<string, TeamMemberRow>()
@@ -502,7 +502,7 @@ export async function replaceTeamRows(
 
   // 4. Combine: old rows from other projects + new deduped
   const finalData = [...rowsToKeep, ...dedupedNewMembers]
-  console.log("[v0] replaceTeamRows: final data will have', finalData.length, "total rows")
+  console.log("[v0] replaceTeamRows: final data will have", finalData.length, "total rows")
 
   if (finalData.length === 0) {
     console.log("[v0] replaceTeamRows: no data to save, skipping")
