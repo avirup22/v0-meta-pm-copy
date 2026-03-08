@@ -636,11 +636,10 @@ export async function sendTranscriptToWebhook(payload: {
   project_team: Array<{ name: string; email: string; designation: string }>
   transcript: string
 }): Promise<any> {
-  const webhookUrl = "https://indegene-sbx.app.n8n.cloud/webhook-test/momagent"
-  
   console.log("[v0] sendTranscriptToWebhook:", payload.title)
   
-  const res = await fetch(webhookUrl, {
+  // Call the server-side proxy instead of calling n8n directly (avoids CORS)
+  const res = await fetch("/api/webhook-proxy", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -648,7 +647,7 @@ export async function sendTranscriptToWebhook(payload: {
   
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err?.message ?? `HTTP ${res.status}`)
+    throw new Error(err?.error ?? `HTTP ${res.status}`)
   }
   
   const data = await res.json()
