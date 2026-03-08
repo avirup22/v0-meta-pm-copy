@@ -467,3 +467,45 @@ export async function updateExcelRow(token: string, sheet: string, projectFolder
   
   console.log("[v0] updateExcelRow: success")
 }
+
+/**
+ * Delete all rows for a project from a team sheet, then insert new ones.
+ * This replaces old team members with updated ones.
+ */
+export async function replaceTeamRows(
+  token: string,
+  newMembers: TeamMemberRow[],
+  sheet: "internal_team" | "client_team"
+): Promise<void> {
+  if (!newMembers.length) return
+
+  const fileId = await findDatabaseFile(token)
+  const projectFolderId = newMembers[0].Project_folder_ID
+
+  // Get all rows to identify which ones to delete
+  const allRows = await readWorksheet<TeamMemberRow>(token, fileId, sheet)
+  const rowsToDelete = allRows
+    .map((row, idx) => ({ row, idx }))
+    .filter((item) => item.row.Project_folder_ID === projectFolderId)
+    .sort((a, b) => b.idx - a.idx) // Sort descending to delete from bottom up
+
+  // Delete old rows (from bottom to top to avoid index shifts)
+  for (const { idx } of rowsToDelete) {
+    const excelRowNum = idx + 2 // 1-based + header row
+    const deleteUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/range(address='${excelRowNum}:${excelRowNum}')`
+    
+    const deleteRes = await fetch(deleteUrl, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    
+    if (!deleteRes.ok) {
+      console.warn(`[v0] Failed to delete row ${excelRowNum}`)
+    }
+  }
+
+  console.log("[v0] replaceTeamRows: deleted", rowsToDelete.length, "old rows")
+
+  // Insert new rows
+  await insertTeamRows(token, newMembers, sheet)
+}

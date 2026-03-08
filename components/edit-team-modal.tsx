@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { X, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
-import { insertTeamRows } from '@/lib/graph'
+import { replaceTeamRows } from '@/lib/graph'
 import type { TeamMemberRow } from '@/lib/graph'
 
 interface EditTeamModalProps {
@@ -64,7 +64,8 @@ export function EditTeamModal({ title, folderId, team, sheet, onClose, onSave }:
         Email: m.email,
         Designation: m.designation,
       }))
-      await insertTeamRows(token, newMembers, sheet)
+      // Use replaceTeamRows to delete old rows first, then insert new ones
+      await replaceTeamRows(token, newMembers, sheet)
       await onSave()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save team members')
