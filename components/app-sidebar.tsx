@@ -145,9 +145,6 @@ export function AppSidebar() {
         {/* Home */}
         <NavLink href="/projects" icon={<Home size={16} strokeWidth={1.8} />} label="Home" active={pathname === "/projects"} collapsed={collapsed} />
 
-        {/* Projects header link */}
-        <NavLink href="/projects" icon={<FolderOpen size={16} strokeWidth={1.8} />} label="Projects" active={pathname === "/projects"} collapsed={collapsed} />
-
         {/* Customer → Project hierarchy */}
         {!collapsed && (
           <div className="flex flex-col gap-0.5 pl-2">
