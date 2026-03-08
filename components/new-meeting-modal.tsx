@@ -3,7 +3,11 @@
 import { useState, useRef } from "react"
 import { X, Loader2, Upload, FileText } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { sendTranscriptToWebhook, fetchProjectDatabase } from "@/lib/graph"
+import { 
+  sendTranscriptToWebhook, 
+  fetchProjectDatabase, 
+  saveMeetingDataToExcel 
+} from "@/lib/graph"
 
 interface NewMeetingModalProps {
   projectSlug: string
@@ -26,6 +30,13 @@ export function NewMeetingModal({
   const [error, setError] = useState<string | null>(null)
   const [webhookResponse, setWebhookResponse] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Store meeting context for saving
+  const [meetingContext, setMeetingContext] = useState<{
+    meetingId: string
+    code: string
+    projectTeam: Array<{ name: string; email: string; designation: string }>
+  } | null>(null)
   
   const [meetingDetails, setMeetingDetails] = useState({
     title: "",
@@ -114,6 +125,9 @@ export function NewMeetingModal({
         })),
       ]
 
+      // Store meeting context for later use
+      setMeetingContext({ meetingId, code, projectTeam })
+
       // Send to webhook
       const response = await sendTranscriptToWebhook({
         title: meetingDetails.title,
@@ -136,9 +150,40 @@ export function NewMeetingModal({
     }
   }
 
-  function handleConfirmResponse() {
-    onCreated(webhookResponse)
-    onClose()
+  async function handleConfirmResponse() {
+    if (!meetingContext || !token) {
+      setError("Missing meeting context")
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      // Save the meeting data to Excel
+      const [year, month, day] = meetingDetails.date.split("-")
+      const formattedDate = `${day}-${month}-${year}`
+
+      await saveMeetingDataToExcel(
+        token,
+        projectFolderId,
+        meetingContext.meetingId,
+        meetingDetails.title,
+        formattedDate,
+        meetingContext.code,
+        meetingContext.projectTeam,
+        webhookResponse
+      )
+
+      console.log("[v0] Meeting data saved to Excel successfully")
+      onCreated(webhookResponse)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save meeting data")
+      console.error("[v0] Error saving meeting data:", err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -312,10 +357,18 @@ export function NewMeetingModal({
               </button>
               <button
                 onClick={handleConfirmResponse}
-                className="px-4 py-2 text-sm font-sans text-primary-foreground rounded-lg transition-colors"
+                disabled={loading}
+                className="px-4 py-2 text-sm font-sans text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
                 style={{ background: "var(--primary)" }}
               >
-                Confirm & Save
+                {loading ? (
+                  <>
+                    <Loader2 size={14} strokeWidth={2} className="animate-spin mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  "Confirm & Save"
+                )}
               </button>
             </div>
           </div>

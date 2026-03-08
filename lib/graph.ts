@@ -655,3 +655,107 @@ export async function sendTranscriptToWebhook(payload: {
   return data
 }
 
+// ─── Meeting Data Insertion Functions ──────────────────────────────────────────
+
+/**
+ * Save webhook response data (decisions, actions, risks, discussions) to Excel database.
+ */
+export async function saveMeetingDataToExcel(
+  token: string,
+  projectFolderId: string,
+  meetingId: string,
+  title: string,
+  date: string,
+  code: string,
+  projectTeam: Array<{ name: string; email: string; designation: string }>,
+  webhookResponse: any
+): Promise<void> {
+  try {
+    const fileId = await findDatabaseFile(token)
+
+    // Extract organizer from project team (first internal team member or default)
+    const organizer = projectTeam[0]?.name || "Account Holder"
+
+    // 1. Insert meeting record
+    const meetingRow: MeetingRow = {
+      Meeting_ID: meetingId,
+      Project_folder_ID: projectFolderId,
+      Meeting_title: title,
+      Meeting_date: date,
+      Organizer: organizer,
+    }
+
+    await insertRows(token, fileId, "meetings", [meetingRow])
+    console.log("[v0] Inserted meeting record:", meetingId)
+
+    // 2. Insert decisions with auto-generated IDs
+    const decisions = webhookResponse.output?.decisions || []
+    const decisionRows: DecisionRow[] = decisions.map((d: any, idx: number) => ({
+      Meeting_ID: meetingId,
+      Decision_ID: `DEC_${Date.now()}_${idx}`,
+      Decision: d.decision || "",
+    }))
+
+    if (decisionRows.length > 0) {
+      await insertRows(token, fileId, "decisions", decisionRows)
+      console.log("[v0] Inserted", decisionRows.length, "decisions")
+    }
+
+    // 3. Insert actions with owner emails looked up from team
+    const actions = webhookResponse.output?.actions || []
+    const actionRows: ActionRow[] = actions.map((a: any, idx: number) => {
+      // Look up owner email from team (case-insensitive match)
+      const teamMember = projectTeam.find(
+        (t) => t.name.toLowerCase() === a.owner?.toLowerCase()
+      )
+      const ownerEmail = teamMember?.email || ""
+
+      return {
+        Meeting_ID: meetingId,
+        Action_ID: `ACT_${Date.now()}_${idx}`,
+        Task: a.task || "",
+        Owner: a.owner || "",
+        Owner_email: ownerEmail,
+        Due_Date: a.due_date || "",
+        Status: a.status || "Pending",
+      }
+    })
+
+    if (actionRows.length > 0) {
+      await insertRows(token, fileId, "actions", actionRows)
+      console.log("[v0] Inserted", actionRows.length, "actions with owner emails looked up")
+    }
+
+    // 4. Insert risks with auto-generated IDs
+    const risks = webhookResponse.output?.risks || []
+    const riskRows: RiskRow[] = risks.map((r: any, idx: number) => ({
+      Meeting_ID: meetingId,
+      Risk_ID: `RISK_${Date.now()}_${idx}`,
+      Risk: r.risk || "",
+    }))
+
+    if (riskRows.length > 0) {
+      await insertRows(token, fileId, "risks", riskRows)
+      console.log("[v0] Inserted", riskRows.length, "risks")
+    }
+
+    // 5. Insert discussion points with auto-generated IDs
+    const discussions = webhookResponse.output?.discussion_points || []
+    const discussionRows: DiscussionRow[] = discussions.map((dp: any, idx: number) => ({
+      Meeting_ID: meetingId,
+      Discussion_ID: `DISC_${Date.now()}_${idx}`,
+      Discussion: dp.point || "",
+    }))
+
+    if (discussionRows.length > 0) {
+      await insertRows(token, fileId, "discussion", discussionRows)
+      console.log("[v0] Inserted", discussionRows.length, "discussion points")
+    }
+
+    console.log("[v0] Successfully saved all meeting data to Excel")
+  } catch (err) {
+    console.error("[v0] Failed to save meeting data:", err)
+    throw err
+  }
+}
+
