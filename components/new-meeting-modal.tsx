@@ -13,10 +13,11 @@ interface NewMeetingModalProps {
 
 export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingModalProps) {
   const { token } = useAuth()
-  const [step, setStep] = useState<"upload" | "details" | "processing">("upload")
+  const [step, setStep] = useState<"upload" | "details" | "processing" | "response">("upload")
   const [transcript, setTranscript] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [webhookResponse, setWebhookResponse] = useState<any>(null)
   
   const [meetingDetails, setMeetingDetails] = useState({
     title: "",
@@ -70,7 +71,7 @@ export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingM
       }))
 
       // Send to webhook
-      const webhookResponse = await sendTranscriptToWebhook({
+      const response = await sendTranscriptToWebhook({
         title: meetingDetails.title,
         date: meetingDetails.date,
         meeting_id: meetingId,
@@ -80,17 +81,23 @@ export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingM
         transcript,
       })
 
-      console.log("[v0] Webhook response:", webhookResponse)
+      console.log("[v0] Webhook response:", response)
 
-      // Call the onCreated callback with the response
-      onCreated(webhookResponse)
-      onClose()
+      // Show the response in a popup
+      setWebhookResponse(response)
+      setStep("response")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process meeting")
       setStep("details")
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleConfirmResponse() {
+    // Call the onCreated callback with the response
+    onCreated(webhookResponse)
+    onClose()
   }
 
   return (
@@ -101,6 +108,7 @@ export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingM
             {step === "upload" && "Upload Meeting Transcript"}
             {step === "details" && "Meeting Details"}
             {step === "processing" && "Processing Meeting"}
+            {step === "response" && "Webhook Response"}
           </h2>
           {step !== "processing" && (
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -198,6 +206,34 @@ export function NewMeetingModal({ projectSlug, onClose, onCreated }: NewMeetingM
             <p className="text-sm font-sans text-muted-foreground text-center">
               Processing your meeting transcript with AI...
             </p>
+          </div>
+        )}
+
+        {step === "response" && webhookResponse && (
+          <div className="flex flex-col gap-4">
+            <div className="bg-secondary rounded-lg p-4 max-h-[400px] overflow-y-auto border border-border">
+              <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-words">
+                {JSON.stringify(webhookResponse, null, 2)}
+              </pre>
+            </div>
+            <p className="text-xs text-muted-foreground font-sans">
+              This is the webhook response from n8n. Please review and let us know where to save each field in your Excel database.
+            </p>
+            <div className="flex gap-3 ml-auto">
+              <button
+                onClick={() => setStep("details")}
+                className="px-4 py-2 text-sm font-sans text-foreground border border-border rounded-lg hover:bg-secondary transition-colors"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleConfirmResponse}
+                className="px-4 py-2 text-sm font-sans text-primary-foreground rounded-lg transition-colors"
+                style={{ background: "var(--primary)" }}
+              >
+                Confirm & Save
+              </button>
+            </div>
           </div>
         )}
       </div>
