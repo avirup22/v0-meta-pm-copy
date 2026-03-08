@@ -530,3 +530,96 @@ export async function replaceTeamRows(
 
   console.log("[v0] replaceTeamRows: successfully inserted all rows")
 }
+
+// ─── Meeting Database Functions ────────────────────────────────────────────────
+
+export interface MeetingRow {
+  Meeting_ID: string
+  Project_folder_ID: string
+  Meeting_title: string
+  Meeting_date: string
+  Organizer: string
+}
+
+export interface MeetingAttendeeRow {
+  Meeting_ID: string
+  Name: string
+  Email: string
+  Attendance_Status: string
+}
+
+export interface DecisionRow {
+  Meeting_ID: string
+  Decision_ID: string
+  Decision: string
+}
+
+export interface ActionRow {
+  Meeting_ID: string
+  Action_ID: string
+  Task: string
+  Owner: string
+  Owner_email: string
+  Due_Date: string
+  Status: string
+}
+
+export interface RiskRow {
+  Meeting_ID: string
+  Risk_ID: string
+  Risk: string
+}
+
+export interface DiscussionRow {
+  Meeting_ID: string
+  Discussion_ID: string
+  Discussion: string
+}
+
+export interface MeetingDatabase {
+  meetings: MeetingRow[]
+  attendees: MeetingAttendeeRow[]
+  decisions: DecisionRow[]
+  actions: ActionRow[]
+  risks: RiskRow[]
+  discussions: DiscussionRow[]
+}
+
+/**
+ * Fetch all meeting data for a project from the database.xlsx file.
+ * Reads from: meetings, meeting_attendees, decisions, actions, risks, discussion worksheets.
+ */
+export async function fetchMeetingDatabase(
+  token: string,
+  projectFolderId: string
+): Promise<MeetingDatabase> {
+  console.log("[v0] fetchMeetingDatabase for project:", projectFolderId)
+  const fileId = await findDatabaseFile(token)
+
+  const [allMeetings, allAttendees, allDecisions, allActions, allRisks, allDiscussions] = await Promise.all([
+    readWorksheet<MeetingRow>(token, fileId, "meetings").catch(() => []),
+    readWorksheet<MeetingAttendeeRow>(token, fileId, "meeting_attendees").catch(() => []),
+    readWorksheet<DecisionRow>(token, fileId, "decisions").catch(() => []),
+    readWorksheet<ActionRow>(token, fileId, "actions").catch(() => []),
+    readWorksheet<RiskRow>(token, fileId, "risks").catch(() => []),
+    readWorksheet<DiscussionRow>(token, fileId, "discussion").catch(() => []),
+  ])
+
+  // Filter all data by project folder ID via meeting_id lookup
+  const projectMeetingIds = new Set(
+    allMeetings
+      .filter((m) => m.Project_folder_ID === projectFolderId)
+      .map((m) => m.Meeting_ID)
+  )
+
+  const meetings = allMeetings.filter((m) => m.Project_folder_ID === projectFolderId)
+  const attendees = allAttendees.filter((a) => projectMeetingIds.has(a.Meeting_ID))
+  const decisions = allDecisions.filter((d) => projectMeetingIds.has(d.Meeting_ID))
+  const actions = allActions.filter((a) => projectMeetingIds.has(a.Meeting_ID))
+  const risks = allRisks.filter((r) => projectMeetingIds.has(r.Meeting_ID))
+  const discussions = allDiscussions.filter((d) => projectMeetingIds.has(d.Meeting_ID))
+
+  console.log("[v0] fetchMeetingDatabase: found", meetings.length, "meetings,", attendees.length, "attendees,", decisions.length, "decisions,", actions.length, "actions,", risks.length, "risks,", discussions.length, "discussions")
+  
+  return { meetings, attendees, decisions, actions, risks, discussions }
+}

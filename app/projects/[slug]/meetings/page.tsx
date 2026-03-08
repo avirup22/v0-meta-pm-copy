@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import {
+  fetchAllCustomersWithProjects,
+  fetchMeetingDatabase,
+  type MeetingDatabase,
+} from "@/lib/graph"
+import {
   CalendarDays,
   CheckSquare,
   ChevronRight,
@@ -18,6 +23,7 @@ import {
   FileText,
   Loader2,
   ChevronDown,
+  AlertTriangle,
 } from "lucide-react"
 
 interface PageProps {
@@ -88,13 +94,11 @@ export interface MeetingRecord {
   title: string
   date: string
   displayDate: string
+  organizer: string
   participants: number
-  duration: number
   taskCount: number
   decisionCount: number
-  hasTranscript: boolean
-  hasMOM: boolean
-  transcript?: string
+  riskCount: number
 }
 
 // ── Storage helpers (sessionStorage so no DB required) ────────────────────────
@@ -142,14 +146,13 @@ function MeetingRow({ meeting, projectSlug }: { meeting: MeetingRecord; projectS
         </h3>
         <div className="flex items-center gap-3 text-xs text-muted-foreground font-sans">
           <span className="flex items-center gap-1"><Users size={11} strokeWidth={2} />{meeting.participants} participants</span>
-          <span className="flex items-center gap-1"><Clock size={11} strokeWidth={2} />{meeting.duration} min</span>
-          {meeting.hasTranscript && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ background: "oklch(0.52 0.16 240 / 0.1)", color: "var(--primary)" }}>Transcript</span>}
-          {meeting.hasMOM && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ background: "oklch(0.38 0.09 200 / 0.12)", color: "var(--brand-teal)" }}>MOM</span>}
+          {meeting.organizer && <span className="flex items-center gap-1">by {meeting.organizer}</span>}
         </div>
       </div>
       <div className="flex items-center gap-4 shrink-0">
         {meeting.taskCount > 0 && <div className="flex items-center gap-1.5 text-xs font-sans text-muted-foreground"><CheckSquare size={13} strokeWidth={1.8} />{meeting.taskCount} Tasks</div>}
         {meeting.decisionCount > 0 && <div className="flex items-center gap-1.5 text-xs font-sans text-muted-foreground"><CalendarDays size={13} strokeWidth={1.8} />{meeting.decisionCount} Decisions</div>}
+        {meeting.riskCount > 0 && <div className="flex items-center gap-1.5 text-xs font-sans text-muted-foreground"><AlertTriangle size={13} strokeWidth={1.8} />{meeting.riskCount} Risks</div>}
       </div>
       <ChevronRight size={16} strokeWidth={1.8} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
     </Link>
@@ -427,15 +430,94 @@ export default function MeetingsListPage({ params }: PageProps) {
   const [showModal, setShowModal] = useState(false)
   const [meetings, setMeetings] = useState<MeetingRecord[]>([])
   const [activeTab, setActiveTab] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const { token, isAuthenticated } = useAuth()
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/")
   }, [isAuthenticated, router])
 
-  // Load meetings from sessionStorage on mount
+  // Load meetings from Excel database
   useEffect(() => {
-    setMeetings(loadMeetings(slug))
-  }, [slug])
+    async function loadMeetingsFromDB() {
+      if (!token || !isAuthenticated) return
+      
+      try {
+        setLoading(true)
+        setError(null)
+        
+        // Get the project folder ID by matching slug to projects
+        const customersWithProjects = await fetchAllCustomersWithProjects(token)
+        let projectFolderId: string | null = null
+        
+        for (const { projects } of customersWithProjects) {
+          const project = projects.find((p) => {
+            const projectSlug = p.name.toLowerCase().replace(/\s+/g, "-")
+            return projectSlug === slug
+          })
+          if (project) {
+            projectFolderId = project.id
+            break
+          }
+        }
+        
+        if (!projectFolderId) {
+          setMeetings([])
+          setLoading(false)
+          return
+        }
+        
+        // Fetch meeting data from Excel
+        const db = await fetchMeetingDatabase(token, projectFolderId)
+        
+        // Transform Excel data into MeetingRecords
+        const records: MeetingRecord[] = db.meetings.map((m) => {
+          const attendeeCount = db.attendees.filter((a) => a.Meeting_ID === m.Meeting_ID).length
+          const taskCount = db.actions.filter((a) => a.Meeting_ID === m.Meeting_ID).length
+          const decisionCount = db.decisions.filter((d) => d.Meeting_ID === m.Meeting_ID).length
+          const riskCount = db.risks.filter((r) => r.Meeting_ID === m.Meeting_ID).length
+          
+          // Format date from dd-mm-yyyy to display format
+          let displayDate = m.Meeting_date
+          try {
+            const dateStr = m.Meeting_date.includes("-") ? m.Meeting_date : ""
+            if (dateStr) {
+              const d = new Date(dateStr)
+              if (!isNaN(d.getTime())) {
+                const monthName = d.toLocaleString("default", { month: "long" })
+                displayDate = `${monthName} ${d.getDate()}`
+              }
+            }
+          } catch (e) {
+            // Keep original if parse fails
+          }
+          
+          return {
+            id: m.Meeting_ID,
+            title: m.Meeting_title,
+            date: m.Meeting_date,
+            displayDate,
+            organizer: m.Organizer,
+            participants: attendeeCount,
+            taskCount,
+            decisionCount,
+            riskCount,
+          }
+        })
+        
+        setMeetings(records)
+      } catch (err) {
+        console.error("[v0] Failed to load meetings:", err)
+        setError(err instanceof Error ? err.message : "Failed to load meetings")
+        setMeetings([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadMeetingsFromDB()
+  }, [slug, token, isAuthenticated])
 
   if (!isAuthenticated) return null
 
@@ -508,18 +590,19 @@ export default function MeetingsListPage({ params }: PageProps) {
 
       {/* Meetings list */}
       <div className="flex-1 overflow-y-auto bg-background">
-        {meetings.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-24">
+            <Loader2 size={40} strokeWidth={1.5} className="text-muted-foreground animate-spin" />
+            <p className="text-sm font-sans text-muted-foreground">Loading meetings...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-24">
+            <p className="text-sm font-sans text-red-500">{error}</p>
+          </div>
+        ) : meetings.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 py-24">
             <CalendarDays size={40} strokeWidth={1} className="text-muted-foreground" />
-            <p className="text-sm font-sans text-muted-foreground text-center max-w-xs">No meetings yet. Click <strong>New Meeting</strong> to upload a transcript and get started.</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-5 h-9 rounded-lg text-sm font-sans font-medium text-primary-foreground"
-              style={{ background: "var(--primary)" }}
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              New Meeting
-            </button>
+            <p className="text-sm font-sans text-muted-foreground text-center max-w-xs">No data available</p>
           </div>
         ) : (
           <div>
