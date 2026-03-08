@@ -154,7 +154,7 @@ export function AppSidebar() {
 
           {/* Project list */}
           {!collapsed && projectsOpen && (
-            <div className="mt-0.5 flex flex-col gap-0.5 pl-4">
+            <div className="mt-0.5 flex flex-col gap-0.5 pl-3">
               {loadingProjects && (
                 <div className="flex items-center gap-2 px-3 py-1.5">
                   <Loader2 size={12} className="animate-spin" style={{ color: "var(--nav-muted)" }} />
@@ -162,87 +162,98 @@ export function AppSidebar() {
                 </div>
               )}
 
-              {!loadingProjects && (() => {
-                // When a project is open, only show the active project + its sub-nav
-                // When on the projects list, show all projects
-                const visibleProjects = activeProjectSlug
-                  ? projects.filter((p) => toSlug(p.name) === activeProjectSlug)
-                  : projects
+              {!loadingProjects && projects.map((p) => {
+                const slug = toSlug(p.name)
+                const href = `/projects/${slug}`
+                const isOpen = slug === activeProjectSlug
 
-                return visibleProjects.map((p) => {
-                  const href = `/projects/${toSlug(p.name)}`
-                  const isActiveProject = toSlug(p.name) === activeProjectSlug
-                  return (
-                    <div key={p.id}>
-                      {/* Project row */}
+                return (
+                  <div key={p.id}>
+                    {/* Project row: navigate + toggle dropdown */}
+                    <div className="flex items-center rounded-lg overflow-hidden">
                       <Link
                         href={href}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors truncate"
+                        className="flex items-center gap-2 flex-1 pl-2 pr-1 py-1.5 text-xs font-sans transition-colors truncate"
                         style={{
-                          color: isActiveProject ? "var(--nav-active-fg)" : "var(--nav-muted)",
-                          background: isActiveProject ? "var(--nav-active-bg)" : "transparent",
+                          color: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)",
+                          background: isOpen ? "var(--nav-active-bg)" : "transparent",
                         }}
                         onMouseEnter={(e) => {
-                          if (!isActiveProject) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
+                          if (!isOpen) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
                         }}
                         onMouseLeave={(e) => {
-                          if (!isActiveProject) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
+                          if (!isOpen) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
                         }}
                       >
-                        <span className="w-1 h-1 rounded-full shrink-0" style={{ background: isActiveProject ? "var(--nav-active-fg)" : "var(--nav-muted)" }} />
-                        {p.name}
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ background: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)" }}
+                        />
+                        <span className="truncate">{p.name}</span>
                       </Link>
-
-                      {/* Sub-nav indented under active project */}
-                      {isActiveProject && (
-                        <div className="mt-0.5 flex flex-col gap-0.5 pl-4">
-                          {PROJECT_NAV.map((item) => {
-                            const subHref = `/projects/${activeProjectSlug}${item.suffix}`
-                            const subActive = pathname === subHref || pathname.startsWith(subHref + "/")
-                            return (
-                              <Link
-                                key={subHref}
-                                href={subHref}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors"
-                                style={{
-                                  color: subActive ? "var(--nav-active-fg)" : "var(--nav-muted)",
-                                  background: subActive ? "var(--nav-active-bg)" : "transparent",
-                                }}
-                                onMouseEnter={(e) => {
-                                  if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
-                                }}
-                              >
-                                <span className="shrink-0">{item.icon}</span>
-                                {item.label}
-                              </Link>
-                            )
-                          })}
-                        </div>
-                      )}
+                      {/* Chevron toggle — expands/collapses sub-nav without navigating */}
+                      <button
+                        onClick={() => router.push(href)}
+                        className="shrink-0 p-1.5 rounded transition-colors"
+                        style={{ color: isOpen ? "var(--nav-active-fg)" : "var(--nav-muted)" }}
+                        aria-label={isOpen ? "Collapse project" : "Expand project"}
+                      >
+                        <ChevronDown
+                          size={12}
+                          strokeWidth={2.5}
+                          className="transition-transform duration-200"
+                          style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
+                        />
+                      </button>
                     </div>
-                  )
-                })
-              })()}
 
-              {/* Create project — only shown when no project is open */}
-              {!activeProjectSlug && (
-                <button
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-colors"
-                  style={{ color: "var(--nav-muted)" }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)"
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.background = "transparent"
-                  }}
-                >
-                  <Plus size={12} strokeWidth={2.5} />
-                  Create Project
-                </button>
-              )}
+                    {/* Sub-nav — only for the active/open project */}
+                    {isOpen && (
+                      <div className="mt-0.5 mb-1 flex flex-col gap-0.5 pl-5">
+                        {PROJECT_NAV.map((item) => {
+                          const subHref = `/projects/${slug}${item.suffix}`
+                          const subActive = pathname === subHref || pathname.startsWith(subHref + "/")
+                          return (
+                            <Link
+                              key={subHref}
+                              href={subHref}
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-sans transition-colors"
+                              style={{
+                                color: subActive ? "var(--nav-active-fg)" : "var(--nav-muted)",
+                                background: subActive ? "var(--nav-active-bg)" : "transparent",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
+                              }}
+                            >
+                              <span className="shrink-0">{item.icon}</span>
+                              {item.label}
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Create project */}
+              <button
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-sans transition-colors mt-0.5"
+                style={{ color: "var(--nav-muted)" }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)"
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent"
+                }}
+              >
+                <Plus size={12} strokeWidth={2.5} />
+                Create Project
+              </button>
             </div>
           )}
         </div>
