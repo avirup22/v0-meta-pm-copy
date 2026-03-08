@@ -55,34 +55,50 @@ function initials(name: string) {
 function formatDate(value: string | number): string {
   if (!value) return "—"
   
-  // If it's a string in dd-mm-yyyy format, return as-is
-  if (typeof value === "string" && /^\d{2}-\d{2}-\d{4}$/.test(value)) {
-    return value
+  const str = String(value).trim()
+  
+  // If it's already in dd-mm-yyyy format, return as-is
+  if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+    return str
   }
   
-  // If it's an Excel serial number (large number)
-  if (typeof value === "number" && value > 1000) {
-    // Excel epoch starts at Jan 1, 1900
+  // If it's formatted as dd-mm-xxxxx (Excel serial number as string with partial separator)
+  // e.g., "01-01-46084" → parse and convert
+  const parts = str.split("-")
+  if (parts.length === 3 && /^\d+$/.test(parts[2]) && parts[2].length > 4) {
+    const serialNum = parseInt(parts[2], 10)
+    if (serialNum > 1000) {
+      // Excel epoch starts at Jan 1, 1900
+      const excelEpoch = new Date(1900, 0, -1)
+      const date = new Date(excelEpoch.getTime() + serialNum * 86400000)
+      const dd = String(date.getDate()).padStart(2, "0")
+      const mm = String(date.getMonth() + 1).padStart(2, "0")
+      const yyyy = date.getFullYear()
+      return `${dd}-${mm}-${yyyy}`
+    }
+  }
+  
+  // Try to parse as numeric serial (if it's a large number)
+  const num = Number(str)
+  if (!isNaN(num) && num > 1000) {
     const excelEpoch = new Date(1900, 0, -1)
-    const date = new Date(excelEpoch.getTime() + value * 86400000)
+    const date = new Date(excelEpoch.getTime() + num * 86400000)
     const dd = String(date.getDate()).padStart(2, "0")
     const mm = String(date.getMonth() + 1).padStart(2, "0")
     const yyyy = date.getFullYear()
     return `${dd}-${mm}-${yyyy}`
   }
   
-  // Try to parse as date string
-  if (typeof value === "string") {
-    const d = new Date(value)
-    if (!isNaN(d.getTime())) {
-      const dd = String(d.getDate()).padStart(2, "0")
-      const mm = String(d.getMonth() + 1).padStart(2, "0")
-      const yyyy = d.getFullYear()
-      return `${dd}-${mm}-${yyyy}`
-    }
+  // Try to parse as ISO/standard date string
+  const d = new Date(str)
+  if (!isNaN(d.getTime())) {
+    const dd = String(d.getDate()).padStart(2, "0")
+    const mm = String(d.getMonth() + 1).padStart(2, "0")
+    const yyyy = d.getFullYear()
+    return `${dd}-${mm}-${yyyy}`
   }
   
-  return String(value)
+  return str
 }
 
 const AVATAR_COLORS = [
@@ -118,6 +134,8 @@ export default function ProjectPage({ params }: PageProps) {
   const [folderId, setFolderId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Edit modal state
+  const [editModal, setEditModal] = useState<"project" | "internal-team" | "client-team" | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/")
@@ -280,46 +298,58 @@ export default function ProjectPage({ params }: PageProps) {
               <div className="bg-card rounded-xl border border-border p-5 flex flex-col gap-0 divide-y divide-border">
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
                   <h2 className="text-sm font-semibold text-foreground font-sans">Project Overview</h2>
-                  <button className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors">
+                  <button 
+                    onClick={() => setEditModal("project")}
+                    className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors"
+                  >
                     Edit
                   </button>
                 </div>
-                {overviewRows.map((row) => (
-                  <div key={row.label} className="flex items-center justify-between py-2 gap-4">
-                    <span className="text-xs text-muted-foreground font-sans">{row.label}</span>
-                    {row.badge ? (
-                      <span
-                        className="text-xs font-semibold px-2.5 py-0.5 rounded font-sans"
-                        style={{
-                          background: row.value.toLowerCase() === "active"
-                            ? "oklch(0.9 0.12 145)"
-                            : "var(--secondary)",
-                          color: row.value.toLowerCase() === "active"
-                            ? "oklch(0.3 0.1 145)"
-                            : "var(--muted-foreground)",
-                        }}
-                      >
-                        {row.value}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-foreground font-sans font-medium text-right">{row.value}</span>
-                    )}
+                {proj ? (
+                  overviewRows.map((row) => (
+                    <div key={row.label} className="flex items-center justify-between py-2 gap-4">
+                      <span className="text-xs text-muted-foreground font-sans">{row.label}</span>
+                      {row.badge ? (
+                        <span
+                          className="text-xs font-semibold px-2.5 py-0.5 rounded font-sans"
+                          style={{
+                            background: row.value.toLowerCase() === "active"
+                              ? "oklch(0.9 0.12 145)"
+                              : "var(--secondary)",
+                            color: row.value.toLowerCase() === "active"
+                              ? "oklch(0.3 0.1 145)"
+                              : "var(--muted-foreground)",
+                          }}
+                        >
+                          {row.value}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-foreground font-sans font-medium text-right">{row.value}</span>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-6 flex items-center justify-center text-center">
+                    <p className="text-xs text-muted-foreground font-sans">Add details</p>
                   </div>
-                ))}
+                )}
               </div>
 
               {/* Internal Team */}
-              {internalTeam.length > 0 && (
-                <div className="bg-card rounded-xl border border-border p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Users size={14} className="text-muted-foreground" />
-                      <h2 className="text-sm font-semibold text-foreground font-sans">Internal Team</h2>
-                    </div>
-                    <button className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors">
-                      Edit
-                    </button>
+              <div className="bg-card rounded-xl border border-border p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Users size={14} className="text-muted-foreground" />
+                    <h2 className="text-sm font-semibold text-foreground font-sans">Internal Team</h2>
                   </div>
+                  <button 
+                    onClick={() => setEditModal("internal-team")}
+                    className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors"
+                  >
+                    Edit
+                  </button>
+                </div>
+                {internalTeam.length > 0 ? (
                   <div className="flex flex-wrap gap-4">
                     {internalTeam.map((m, i) => (
                       <div key={m.Email || m.Name} className="flex flex-col items-center gap-1.5">
@@ -334,21 +364,28 @@ export default function ProjectPage({ params }: PageProps) {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="py-6 flex items-center justify-center text-center">
+                    <p className="text-xs text-muted-foreground font-sans">Add details</p>
+                  </div>
+                )}
+              </div>
 
               {/* Client Team */}
-              {clientTeam.length > 0 && (
-                <div className="bg-card rounded-xl border border-border p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Briefcase size={14} className="text-muted-foreground" />
-                      <h2 className="text-sm font-semibold text-foreground font-sans">Client Team</h2>
-                    </div>
-                    <button className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors">
-                      Edit
-                    </button>
+              <div className="bg-card rounded-xl border border-border p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Briefcase size={14} className="text-muted-foreground" />
+                    <h2 className="text-sm font-semibold text-foreground font-sans">Client Team</h2>
                   </div>
+                  <button 
+                    onClick={() => setEditModal("client-team")}
+                    className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors"
+                  >
+                    Edit
+                  </button>
+                </div>
+                {clientTeam.length > 0 ? (
                   <div className="flex flex-wrap gap-4">
                     {clientTeam.map((m, i) => (
                       <div key={m.Email || m.Name} className="flex flex-col items-center gap-1.5">
@@ -363,8 +400,12 @@ export default function ProjectPage({ params }: PageProps) {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="py-6 flex items-center justify-center text-center">
+                    <p className="text-xs text-muted-foreground font-sans">Add details</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* ── MIDDLE COLUMN ── */}
@@ -540,6 +581,49 @@ export default function ProjectPage({ params }: PageProps) {
                 </ul>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modals */}
+      {editModal === "project" && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-xl border border-border max-w-md w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4">
+            <h2 className="text-lg font-semibold text-foreground font-sans">Edit Project Details</h2>
+            <button
+              onClick={() => setEditModal(null)}
+              className="text-xs text-primary hover:text-primary/80 font-sans mt-auto"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editModal === "internal-team" && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-xl border border-border max-w-md w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4">
+            <h2 className="text-lg font-semibold text-foreground font-sans">Edit Internal Team</h2>
+            <button
+              onClick={() => setEditModal(null)}
+              className="text-xs text-primary hover:text-primary/80 font-sans mt-auto"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editModal === "client-team" && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-xl border border-border max-w-md w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4">
+            <h2 className="text-lg font-semibold text-foreground font-sans">Edit Client Team</h2>
+            <button
+              onClick={() => setEditModal(null)}
+              className="text-xs text-primary hover:text-primary/80 font-sans mt-auto"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
