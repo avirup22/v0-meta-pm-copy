@@ -188,7 +188,7 @@ export default function MeetingDetailPage({ params }: PageProps) {
   }, [isAuthenticated, router])
 
   // ── Transcript state
-  const [activeTab, setActiveTab] = useState<Tab>("mom")
+  const [activeTab, setActiveTab] = useState<Tab>("transcript")
   const [dragOver, setDragOver] = useState(false)
   const [transcriptLines, setTranscriptLines] = useState<TranscriptLine[]>([])
   const [transcriptText, setTranscriptText] = useState("")
@@ -196,6 +196,26 @@ export default function MeetingDetailPage({ params }: PageProps) {
   const [meetingDate, setMeetingDate] = useState("")
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load transcript if this meeting was just created via the New Meeting modal
+  useEffect(() => {
+    const stored = sessionStorage.getItem(`metapm_transcript_${meetingId}`)
+    if (stored && stored.trim()) {
+      const lines = stored.split("\n\n").map((block, idx) => {
+        const colon = block.indexOf(": ")
+        if (colon > 0 && colon < 40) {
+          return { timestamp: `00:0${idx}:00`, speaker: block.slice(0, colon), text: block.slice(colon + 2) }
+        }
+        return { timestamp: `00:0${idx}:00`, speaker: "", text: block }
+      })
+      setTranscriptLines(lines)
+      setTranscriptText(stored)
+      setFileName(meetingTitle)
+      setMeetingDate(new Date().toISOString().split("T")[0])
+      // Open on transcript tab so they can review it
+      setActiveTab("transcript")
+    }
+  }, [meetingId, meetingTitle])
 
   // ── Send state
   const [sending, setSending] = useState(false)
