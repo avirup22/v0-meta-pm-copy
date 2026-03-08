@@ -185,6 +185,106 @@ export async function fetchRecordingFiles(token: string): Promise<RecordingsResu
   return { files, driveId, siteUrl }
 }
 
+// ─── Excel / Database types ───────────────────────────────────────────────────
+
+export interface ProjectRow {
+  Client_Name: string
+  Project_Name: string
+  Project_folder_ID: string
+  Project_Manager: string
+  Start_Date: string
+  End_date: string
+  Project_status: string
+  Project_Type: string
+}
+
+export interface TeamMemberRow {
+  Project_folder_ID: string
+  Name: string
+  Email: string
+  Designation: string
+}
+
+export interface ProjectDatabase {
+  project: ProjectRow | null
+  internalTeam: TeamMemberRow[]
+  clientTeam: TeamMemberRow[]
+}
+
+/**
+ * Read a worksheet's usedRange from an Excel file via Graph API.
+ * Returns an array of objects keyed by the first-row headers.
+ */
+async function readWorksheet<T extends Record<string, string>>(
+  token: string,
+  fileId: string,
+  sheetName: string
+): Promise<T[]> {
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${encodeURIComponent(sheetName)}/usedRange`
+  console.log("[v0] readWorksheet →", url)
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    console.error("[v0] readWorksheet error:", body?.error?.message)
+    throw new Error(body?.error?.message ?? `HTTP ${res.status}`)
+  }
+  const data: { values: (string | number | boolean)[][] } = await res.json()
+  const [headers, ...rows] = data.values
+  return rows
+    .filter((row) => row.some((cell) => cell !== "" && cell !== null))
+    .map((row) => {
+      const obj: Record<string, string> = {}
+      headers.forEach((h, i) => {
+        obj[String(h)] = row[i] !== undefined && row[i] !== null ? String(row[i]) : ""
+      })
+      return obj as T
+    })
+}
+
+/**
+ * Locate the "database.xlsx" file inside the MetaPM folder.
+ */
+async function findDatabaseFile(token: string): Promise<string> {
+  const metaPM = await getDriveItemByPath(token, "MetaPM")
+  const url = `${GRAPH_BASE}/me/drive/items/${metaPM.id}/children?$select=id,name,file&$top=50`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data: { value: DriveItem[] } = await res.json()
+  const db = data.value.find(
+    (f) => f.file && /^database\.xlsx?$/i.test(f.name)
+  )
+  if (!db) throw new Error("database.xlsx not found in MetaPM folder")
+  console.log("[v0] findDatabaseFile: found", db.name, "id:", db.id)
+  return db.id
+}
+
+/**
+ * Fetch all three worksheets (projects, internal_team, client_team) from database.xlsx.
+ * Then filter rows that match the given Project_folder_ID.
+ */
+export async function fetchProjectDatabase(
+  token: string,
+  projectFolderId: string
+): Promise<ProjectDatabase> {
+  console.log("[v0] fetchProjectDatabase for folder id:", projectFolderId)
+  const fileId = await findDatabaseFile(token)
+
+  const [allProjects, allInternal, allClient] = await Promise.all([
+    readWorksheet<ProjectRow>(token, fileId, "projects"),
+    readWorksheet<TeamMemberRow>(token, fileId, "internal_team"),
+    readWorksheet<TeamMemberRow>(token, fileId, "client_team"),
+  ])
+
+  const project = allProjects.find((p) => p.Project_folder_ID === projectFolderId) ?? null
+  const internalTeam = allInternal.filter((m) => m.Project_folder_ID === projectFolderId)
+  const clientTeam = allClient.filter((m) => m.Project_folder_ID === projectFolderId)
+
+  console.log("[v0] fetchProjectDatabase: project:", project?.Project_Name, "| team:", internalTeam.length, "+ client:", clientTeam.length)
+  return { project, internalTeam, clientTeam }
+}
+
 export interface CustomerWithProjects {
   customer: DriveItem
   projects: DriveItem[]
