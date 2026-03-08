@@ -484,27 +484,29 @@ export async function replaceTeamRows(
 
   // Get all rows to identify which ones to delete
   const allRows = await readWorksheet<TeamMemberRow>(token, fileId, sheet)
-  const rowsToDelete = allRows
+  const rowIndicesToDelete = allRows
     .map((row, idx) => ({ row, idx }))
     .filter((item) => item.row.Project_folder_ID === projectFolderId)
-    .sort((a, b) => b.idx - a.idx) // Sort descending to delete from bottom up
+    .map((item) => item.idx)
+    .sort((a, b) => b - a) // Sort descending to delete from bottom up
 
-  // Delete old rows (from bottom to top to avoid index shifts)
-  for (const { idx } of rowsToDelete) {
-    const excelRowNum = idx + 2 // 1-based + header row
-    const deleteUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/range(address='${excelRowNum}:${excelRowNum}')`
+  // Delete old rows using Table API (from bottom to top to avoid index shifts)
+  for (const idx of rowIndicesToDelete) {
+    const deleteUrl = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/worksheets/${sheet}/tables/${sheet}/rows/${idx}`
     
+    console.log("[v0] replaceTeamRows: deleting row index", idx)
     const deleteRes = await fetch(deleteUrl, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
     
     if (!deleteRes.ok) {
-      console.warn(`[v0] Failed to delete row ${excelRowNum}`)
+      const err = await deleteRes.json().catch(() => ({}))
+      console.warn(`[v0] Failed to delete row ${idx}:`, err?.error?.message)
     }
   }
 
-  console.log("[v0] replaceTeamRows: deleted", rowsToDelete.length, "old rows")
+  console.log("[v0] replaceTeamRows: deleted", rowIndicesToDelete.length, "old rows")
 
   // Insert new rows
   await insertTeamRows(token, newMembers, sheet)
