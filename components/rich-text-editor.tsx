@@ -12,7 +12,7 @@ interface RichTextEditorProps {
 }
 
 export function RichTextEditor({ content, onChange, disabled = false }: RichTextEditorProps) {
-  const [showPreview, setShowPreview] = useState(false)
+  const [showPreview, setShowPreview] = useState(true)
 
   const insertMarkdown = (before: string, after: string = "") => {
     const textarea = document.getElementById("markdown-editor") as HTMLTextAreaElement
