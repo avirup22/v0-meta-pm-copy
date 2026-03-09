@@ -129,12 +129,10 @@ export default function MeetingDetailPage({ params }: PageProps) {
 
     if (actions.length > 0) {
       mom += `## Action Items\n`
+      mom += `| Task | Owner | Due Date | Status |\n`
+      mom += `|------|-------|----------|--------|\n`
       actions.forEach((a) => {
-        mom += `| Task | Owner | Due Date | Status |\n`
-        mom += `|------|-------|----------|--------|\n`
-        actions.forEach((item) => {
-          mom += `| ${item.Task} | ${item.Owner} | ${item.Due_Date} | ${item.Status} |\n`
-        })
+        mom += `| ${a.Task} | ${a.Owner} | ${a.Due_Date} | ${a.Status} |\n`
       })
       mom += `\n`
     }
