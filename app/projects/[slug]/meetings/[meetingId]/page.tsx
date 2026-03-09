@@ -96,7 +96,7 @@ export default function MeetingDetailPage({ params }: PageProps) {
         setDecisions(db.decisions.filter((d) => d.Meeting_ID === meetingId))
         setActions(db.actions.filter((a) => a.Meeting_ID === meetingId))
         setRisks(db.risks.filter((r) => r.Meeting_ID === meetingId))
-        setDiscussions(db.discussion.filter((dp) => dp.Meeting_ID === meetingId))
+        setDiscussions(db.discussions.filter((dp) => dp.Meeting_ID === meetingId))
 
       } catch (err) {
         console.error("[v0] Failed to load meeting data:", err)
