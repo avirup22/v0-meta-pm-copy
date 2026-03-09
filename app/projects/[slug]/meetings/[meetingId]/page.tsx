@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { fetchMeetingDatabase, fetchAllCustomersWithProjects, type MeetingDatabase } from "@/lib/graph"
+import { RichTextEditor } from "@/components/rich-text-editor"
 import {
   ChevronRight,
   Users,
@@ -47,7 +48,9 @@ export default function MeetingDetailPage({ params }: PageProps) {
   const [actions, setActions] = useState<any[]>([])
   const [risks, setRisks] = useState<any[]>([])
   const [discussions, setDiscussions] = useState<any[]>([])
+  const [momContent, setMomContent] = useState<string>("")
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState("")
   const [editingText, setEditingText] = useState("")
 
   useEffect(() => {
@@ -238,11 +241,11 @@ export default function MeetingDetailPage({ params }: PageProps) {
             {activeTab === "mom" && (
               <div className="bg-card rounded-lg border border-border p-6">
                 <h2 className="text-lg font-semibold text-foreground font-sans mb-4">Minutes of Meeting</h2>
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <pre className="bg-secondary p-4 rounded-lg overflow-x-auto text-xs font-mono text-foreground whitespace-pre-wrap break-words">
-                    {generateMOM()}
-                  </pre>
-                </div>
+                <RichTextEditor
+                  content={momContent || generateMOM()}
+                  onChange={setMomContent}
+                  disabled={false}
+                />
               </div>
             )}
 
