@@ -51,7 +51,6 @@ export default function MeetingDetailPage({ params }: PageProps) {
   const [momContent, setMomContent] = useState<string>("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState("")
-  const [editingText, setEditingText] = useState("")
 
   useEffect(() => {
     if (!isAuthenticated) router.replace("/")
