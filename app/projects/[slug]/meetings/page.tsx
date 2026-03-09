@@ -40,6 +40,50 @@ function toMeetingId(title: string, date: string) {
   return `${title.toLowerCase().replace(/\s+/g, "-")}-${date}`
 }
 
+// Format Excel date (serial number) or dd-mm-yyyy string to display format
+function formatDateDisplay(value: string | number): string {
+  if (!value) return "—"
+  
+  const str = String(value).trim()
+  
+  // If it's already in dd-mm-yyyy format, parse and display
+  if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+    const parts = str.split("-")
+    const day = parts[0]
+    const month = parts[1]
+    const year = parts[2]
+    const d = new Date(`${year}-${month}-${day}`)
+    if (!isNaN(d.getTime())) {
+      const monthName = d.toLocaleString("default", { month: "long" })
+      return `${monthName} ${parseInt(day)}`
+    }
+    return str
+  }
+  
+  // If it's formatted as dd-mm-xxxxx (Excel serial number as string with partial separator)
+  const parts = str.split("-")
+  if (parts.length === 3 && /^\d+$/.test(parts[2]) && parts[2].length > 4) {
+    const serialNum = parseInt(parts[2], 10)
+    if (serialNum > 1000) {
+      const excelEpoch = new Date(1900, 0, -1)
+      const date = new Date(excelEpoch.getTime() + serialNum * 86400000)
+      const monthName = date.toLocaleString("default", { month: "long" })
+      return `${monthName} ${date.getDate()}`
+    }
+  }
+  
+  // Try to parse as numeric serial (if it's a large number)
+  const num = Number(str)
+  if (!isNaN(num) && num > 1000) {
+    const excelEpoch = new Date(1900, 0, -1)
+    const date = new Date(excelEpoch.getTime() + num * 86400000)
+    const monthName = date.toLocaleString("default", { month: "long" })
+    return `${monthName} ${date.getDate()}`
+  }
+  
+  return str
+}
+
 // ── VTT parser (same as detail page) ─────────────────────────────────────────
 
 function extractCues(vtt: string): { speaker: string; text: string }[] {
@@ -215,20 +259,8 @@ export default function MeetingsListPage({ params }: PageProps) {
         const decisionCount = db.decisions.filter((d) => d.Meeting_ID === m.Meeting_ID).length
         const riskCount = db.risks.filter((r) => r.Meeting_ID === m.Meeting_ID).length
         
-        // Format date from dd-mm-yyyy to display format
-        let displayDate = m.Meeting_date
-        try {
-          const dateStr = m.Meeting_date.includes("-") ? m.Meeting_date : ""
-          if (dateStr) {
-            const d = new Date(dateStr)
-            if (!isNaN(d.getTime())) {
-              const monthName = d.toLocaleString("default", { month: "long" })
-              displayDate = `${monthName} ${d.getDate()}`
-            }
-          }
-        } catch (e) {
-          // Keep original if parse fails
-        }
+        // Format date using the formatDateDisplay function
+        const displayDate = formatDateDisplay(m.Meeting_date)
         
         return {
           id: m.Meeting_ID,
