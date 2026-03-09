@@ -3,7 +3,6 @@
 import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Table from "@tiptap/extension-table"
-import TableRow from "@tiptap/extension-table-row"
 import TableHeader from "@tiptap/extension-table-header"
 import TableCell from "@tiptap/extension-table-cell"
 import { Bold, Italic, List, ListOrdered, Table as TableIcon, Undo2, Redo2 } from "lucide-react"
@@ -21,7 +20,6 @@ export function RichTextEditor({ content, onChange, disabled = false }: RichText
       Table.configure({
         resizable: true,
       }),
-      TableRow,
       TableHeader,
       TableCell,
     ],
