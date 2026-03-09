@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { AuthProvider } from '@/contexts/auth-context'
+import { MabelModeProvider } from '@/contexts/mabel-mode-context'
 import { AppSidebar } from '@/components/app-sidebar'
+import { MabelModeToggle } from '@/components/mabel-mode-toggle'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -29,14 +31,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased">
-        <AuthProvider>
-          <div className="flex h-screen overflow-hidden">
-            <AppSidebar />
-            <main className="flex-1 overflow-y-auto bg-background">
-              {children}
-            </main>
-          </div>
-        </AuthProvider>
+        <MabelModeProvider>
+          <AuthProvider>
+            <div className="flex h-screen overflow-hidden">
+              <AppSidebar />
+              <main className="flex-1 overflow-y-auto bg-background relative">
+                <div className="absolute top-4 left-4 z-50">
+                  <MabelModeToggle />
+                </div>
+                {children}
+              </main>
+            </div>
+          </AuthProvider>
+        </MabelModeProvider>
       </body>
     </html>
   )
