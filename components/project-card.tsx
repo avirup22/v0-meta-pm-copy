@@ -7,12 +7,13 @@ interface ProjectCardProps {
   customerName?: string
 }
 
-// Deterministic color per card based on name
+// Deterministic color per card — bold, saturated Figma-palette
 const ACCENT_COLORS = [
-  { bg: "oklch(0.97 0.025 293)", dot: "oklch(0.54 0.26 293)" },  // violet
-  { bg: "oklch(0.97 0.025 240)", dot: "oklch(0.58 0.26 240)" },  // blue
-  { bg: "oklch(0.97 0.025 160)", dot: "oklch(0.60 0.20 160)" },  // teal
-  { bg: "oklch(0.97 0.025 30)",  dot: "oklch(0.68 0.24 30)"  },  // orange
+  { bg: "oklch(0.94 0.06 293)",  dot: "oklch(0.58 0.30 293)",  shadow: "oklch(0.58 0.30 293 / 0.22)" },  // electric violet
+  { bg: "oklch(0.93 0.06 240)",  dot: "oklch(0.56 0.28 240)",  shadow: "oklch(0.56 0.28 240 / 0.22)" },  // royal blue
+  { bg: "oklch(0.92 0.07 200)",  dot: "oklch(0.58 0.18 200)",  shadow: "oklch(0.58 0.18 200 / 0.22)" },  // electric cyan
+  { bg: "oklch(0.93 0.07 150)",  dot: "oklch(0.55 0.22 150)",  shadow: "oklch(0.55 0.22 150 / 0.22)" },  // emerald
+  { bg: "oklch(0.94 0.07 35)",   dot: "oklch(0.68 0.24 35)",   shadow: "oklch(0.68 0.24 35 / 0.22)"  },  // vivid orange
 ]
 
 function colorForName(name: string) {
@@ -26,7 +27,20 @@ export function ProjectCard({ name, slug, customerName }: ProjectCardProps) {
   return (
     <Link href={`/projects/${slug}`} className="block group">
       <div
-        className="relative rounded-xl border border-border bg-card p-5 flex flex-col gap-5 hover:shadow-lg hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+        className="relative rounded-2xl border border-border bg-card p-5 flex flex-col gap-5 transition-all duration-200 cursor-pointer overflow-hidden"
+        style={{
+          boxShadow: "0 1px 3px oklch(0 0 0 / 0.06)",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLDivElement).style.boxShadow = `0 12px 36px -6px ${color.shadow}`
+          ;(e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"
+          ;(e.currentTarget as HTMLDivElement).style.borderColor = color.dot
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 3px oklch(0 0 0 / 0.06)"
+          ;(e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"
+          ;(e.currentTarget as HTMLDivElement).style.borderColor = ""
+        }}
       >
         {/* Top row: icon + arrow */}
         <div className="flex items-start justify-between">
@@ -34,30 +48,31 @@ export function ProjectCard({ name, slug, customerName }: ProjectCardProps) {
             className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: color.bg }}
           >
-            <Folder size={18} style={{ color: color.dot }} strokeWidth={1.8} />
+            <Folder size={17} style={{ color: color.dot }} strokeWidth={2} />
           </div>
           <ArrowUpRight
-            size={16}
-            strokeWidth={2}
-            className="text-muted-foreground/40 group-hover:text-primary group-hover:opacity-100 transition-all duration-150 mt-0.5"
+            size={15}
+            strokeWidth={2.5}
+            className="text-muted-foreground/30 group-hover:opacity-100 transition-all duration-150 mt-0.5"
+            style={{ color: color.dot }}
           />
         </div>
 
         {/* Name */}
         <div className="flex flex-col gap-1">
           {customerName && (
-            <span className="text-[10px] font-sans font-semibold text-muted-foreground uppercase tracking-widest">
+            <span className="text-[9px] font-extrabold text-muted-foreground uppercase tracking-[0.14em]">
               {customerName}
             </span>
           )}
-          <h2 className="text-sm font-bold text-foreground font-sans leading-snug text-pretty">
+          <h2 className="text-sm font-bold text-foreground leading-snug text-pretty">
             {name}
           </h2>
         </div>
 
-        {/* Accent bar at bottom */}
+        {/* Accent bar — always visible, colored */}
         <div
-          className="absolute bottom-0 left-0 right-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"
           style={{ background: color.dot }}
         />
       </div>

@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google'
 import { AuthProvider } from '@/contexts/auth-context'
 import { MabelModeProvider } from '@/contexts/mabel-mode-context'
 import { AppSidebar } from '@/components/app-sidebar'
 import { MabelModeToggle } from '@/components/mabel-mode-toggle'
 import './globals.css'
 
-const _inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
+const _jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", weight: ["400","500","600","700","800"] });
+const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
   title: 'MetaPM – Project Manager',
@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${_inter.variable} ${_jetbrainsMono.variable} font-sans antialiased`}>
+      <body className={`${_jakarta.variable} ${_jetbrainsMono.variable} font-sans antialiased`}>
         <MabelModeProvider>
           <AuthProvider>
             <div className="flex h-screen overflow-hidden">
