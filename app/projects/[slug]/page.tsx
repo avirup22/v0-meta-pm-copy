@@ -552,7 +552,7 @@ export default function ProjectPage({ params }: PageProps) {
               {/* Ask MetaPM */}
               <div className="rounded-xl border border-border p-5 overflow-hidden relative" style={{ background: "color-mix(in oklch, var(--primary) 6%, white)" }}>
                 <div
-                  className="absolute top-0 right-0 w-40 h-40 -translate-y-10 translate-x-10 rounded-full opacity-25"
+                  className="absolute top-0 right-0 w-28 h-28 -translate-y-8 translate-x-8 rounded-full opacity-20"
                   style={{ background: "var(--primary)" }}
                 />
                 <div className="flex items-center gap-2 mb-3 relative">
