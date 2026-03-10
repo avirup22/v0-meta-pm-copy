@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import JSZip from "jszip"
-import { FilePresentation, Download, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { Presentation, Download, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { listFolderFiles, fetchFileAsArrayBuffer, getDriveItemByPath, listFolderChildren } from "@/lib/graph"
 
@@ -137,7 +137,7 @@ export function PptEditor({ projectFolderId, projectName }: PptEditorProps) {
     <div className="bg-card rounded-xl border border-border p-5 flex flex-col gap-4">
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--primary)" }}>
-          <FilePresentation size={18} className="text-primary-foreground" />
+          <Presentation size={18} className="text-primary-foreground" />
         </div>
         <div>
           <p className="text-sm font-semibold text-foreground font-sans">PPT Template Editor</p>
@@ -153,7 +153,7 @@ export function PptEditor({ projectFolderId, projectName }: PptEditorProps) {
           className="w-full px-4 py-2 text-sm font-sans font-semibold text-primary-foreground rounded-lg transition-colors flex items-center justify-center gap-2"
           style={{ background: "var(--primary)" }}
         >
-          <FilePresentation size={14} strokeWidth={2} />
+          <Presentation size={14} strokeWidth={2} />
           Edit Template
         </button>
       )}
