@@ -28,6 +28,7 @@ import {
 } from "@/lib/graph"
 import { EditProjectModal } from "@/components/edit-project-modal"
 import { EditTeamModal } from "@/components/edit-team-modal"
+import { PptEditor } from "@/components/ppt-editor"
 
 // ─── Webhook URLs (commented out — to be wired up from meetings page)
 // const WEBHOOK_TRANSCRIPT = "https://indegene-sbx.app.n8n.cloud/webhook/meta-pm"
@@ -575,6 +576,11 @@ export default function ProjectPage({ params }: PageProps) {
                   ))}
                 </div>
               </div>
+
+              {/* PPT Template Editor */}
+              {folderId && (
+                <PptEditor projectFolderId={folderId} projectName={projectName} />
+              )}
 
               {/* Export Insights */}
               <div className="bg-card rounded-xl border border-border p-5">

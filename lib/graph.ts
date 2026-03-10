@@ -857,3 +857,41 @@ export async function saveMeetingDataToExcel(
   }
 }
 
+// ─── PPTX Utilities ─────────────────────────────────────────────────────────
+
+/**
+ * List ALL children of a folder (files + folders) — used to find .pptx files.
+ */
+export async function listFolderFiles(
+  token: string,
+  itemId: string
+): Promise<DriveItem[]> {
+  const url = `${GRAPH_BASE}/me/drive/items/${itemId}/children?$select=id,name,folder,file,webUrl&$top=200`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.error?.message ?? `HTTP ${res.status}`)
+  }
+  const data: { value: DriveItem[] } = await res.json()
+  return data.value
+}
+
+/**
+ * Download a Drive item as an ArrayBuffer (for binary files like PPTX).
+ */
+export async function fetchFileAsArrayBuffer(
+  token: string,
+  itemId: string
+): Promise<ArrayBuffer> {
+  // First get the download URL
+  const url = `${GRAPH_BASE}/me/drive/items/${itemId}/content`
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.error?.message ?? `HTTP ${res.status}`)
+  }
+  return res.arrayBuffer()
+}
+
