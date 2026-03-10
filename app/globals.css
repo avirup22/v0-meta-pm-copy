@@ -4,49 +4,69 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.965 0.005 240);
-  --foreground: oklch(0.18 0.025 240);
+  /* Base — pure bright white */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.13 0.02 260);
+
+  /* Cards — white with crisp 1px borders */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.025 240);
+  --card-foreground: oklch(0.13 0.02 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.025 240);
-  --primary: oklch(0.52 0.16 240);
+  --popover-foreground: oklch(0.13 0.02 260);
+
+  /* Primary — Figma electric violet */
+  --primary: oklch(0.54 0.26 293);
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.94 0.005 240);
-  --secondary-foreground: oklch(0.18 0.025 240);
-  --muted: oklch(0.94 0.005 240);
-  --muted-foreground: oklch(0.56 0.01 240);
-  --accent: oklch(0.94 0.005 240);
-  --accent-foreground: oklch(0.18 0.025 240);
+
+  /* Secondary — very light violet tint */
+  --secondary: oklch(0.97 0.015 293);
+  --secondary-foreground: oklch(0.13 0.02 260);
+
+  /* Muted */
+  --muted: oklch(0.96 0.008 260);
+  --muted-foreground: oklch(0.52 0.02 260);
+
+  /* Accent — bright electric blue */
+  --accent: oklch(0.62 0.26 240);
+  --accent-foreground: oklch(1 0 0);
+
+  /* Destructive */
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.008 240);
-  --input: oklch(0.91 0.008 240);
-  --ring: oklch(0.52 0.16 240);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.75rem;
-  --brand-teal: oklch(0.38 0.09 200);
-  /* Navigation sidebar tokens */
-  --nav-bg: oklch(0.24 0.08 240);
-  --nav-fg: oklch(0.96 0 0);
-  --nav-muted: oklch(0.68 0 0);
-  --nav-border: oklch(0.30 0.06 240);
-  --nav-hover-bg: oklch(0.30 0.08 240);
-  --nav-active-bg: oklch(0.42 0.14 240);
+  --destructive-foreground: oklch(1 0 0);
+
+  /* Borders — very light, hairline */
+  --border: oklch(0.91 0.01 260);
+  --input: oklch(0.91 0.01 260);
+  --ring: oklch(0.54 0.26 293);
+
+  /* Charts */
+  --chart-1: oklch(0.54 0.26 293);
+  --chart-2: oklch(0.62 0.26 240);
+  --chart-3: oklch(0.72 0.22 160);
+  --chart-4: oklch(0.78 0.20 60);
+  --chart-5: oklch(0.68 0.24 15);
+
+  --radius: 0.625rem;
+
+  /* Navigation sidebar — deep charcoal, Figma-style */
+  --nav-bg: oklch(0.14 0.02 260);
+  --nav-fg: oklch(0.92 0 0);
+  --nav-muted: oklch(0.56 0.02 260);
+  --nav-border: oklch(0.22 0.02 260);
+  --nav-hover-bg: oklch(0.20 0.02 260);
+  --nav-active-bg: oklch(0.54 0.26 293);
   --nav-active-fg: oklch(1 0 0);
-  --nav-logo: oklch(0.96 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --nav-logo: oklch(1 0 0);
+
+  /* Sidebar shadcn tokens */
+  --sidebar: oklch(0.14 0.02 260);
+  --sidebar-foreground: oklch(0.92 0 0);
+  --sidebar-primary: oklch(0.54 0.26 293);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.20 0.02 260);
+  --sidebar-accent-foreground: oklch(0.92 0 0);
+  --sidebar-border: oklch(0.22 0.02 260);
+  --sidebar-ring: oklch(0.54 0.26 293);
 }
 
 /* 🎨 MABEL MODE 🎨 - Colorful Chaos Energy */

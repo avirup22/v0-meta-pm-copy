@@ -173,34 +173,59 @@ const MOCK_MEETINGS: MeetingRecord[] = [
   { id: "project-kickoff-2026-05-14",   title: "Project Kickoff",    date: "2026-05-14", displayDate: "May 14", participants: 10, duration: 90, taskCount: 4, decisionCount: 4, hasTranscript: true,  hasMOM: true  },
 ]
 
-// ── MeetingRow ────────────────────────────────────────────────────────────────
+// ── MeetingRow ──��─────────────────────────────────────────────────────────────
 
 function MeetingRow({ meeting, projectSlug }: { meeting: MeetingRecord; projectSlug: string }) {
-  const [month, day] = meeting.displayDate.split(" ")
+  const parts = meeting.displayDate.split(" ")
+  const month = parts[0] ?? ""
+  const day = parts[1] ?? ""
   return (
     <Link
       href={`/projects/${projectSlug}/meetings/${meeting.id}`}
-      className="group flex items-center gap-4 px-6 py-4 bg-card border-b border-border hover:bg-secondary/50 transition-colors"
+      className="group flex items-center gap-5 px-6 py-4 bg-card hover:bg-secondary/40 border-b border-border transition-colors"
     >
-      <div className="flex flex-col items-center justify-center w-11 h-11 rounded-xl shrink-0 font-sans" style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-        <span className="text-[9px] font-medium uppercase leading-none opacity-80">{month}</span>
-        <span className="text-base font-bold leading-tight">{day}</span>
+      {/* Date badge */}
+      <div
+        className="flex flex-col items-center justify-center w-12 h-12 rounded-xl shrink-0 font-sans"
+        style={{ background: "color-mix(in oklch, var(--primary) 10%, transparent)" }}
+      >
+        <span className="text-[8px] font-bold uppercase leading-none tracking-wider" style={{ color: "var(--primary)" }}>{month}</span>
+        <span className="text-lg font-black leading-tight" style={{ color: "var(--primary)" }}>{day}</span>
       </div>
+
+      {/* Title + meta */}
       <div className="flex flex-col gap-1 flex-1 min-w-0">
         <h3 className="text-sm font-semibold text-foreground font-sans group-hover:text-primary transition-colors truncate">
-          {meeting.displayDate} &ndash; {meeting.title}
+          {meeting.title}
         </h3>
         <div className="flex items-center gap-3 text-xs text-muted-foreground font-sans">
-          <span className="flex items-center gap-1"><Users size={11} strokeWidth={2} />{meeting.participants} participants</span>
-          {meeting.organizer && <span className="flex items-center gap-1">by {meeting.organizer}</span>}
+          {meeting.organizer && <span>{meeting.organizer}</span>}
+          <span className="flex items-center gap-1"><Users size={10} strokeWidth={2} />{meeting.participants}</span>
         </div>
       </div>
-      <div className="flex items-center gap-4 shrink-0">
-        {meeting.taskCount > 0 && <div className="flex items-center gap-1.5 text-xs font-sans text-muted-foreground"><CheckSquare size={13} strokeWidth={1.8} />{meeting.taskCount} Tasks</div>}
-        {meeting.decisionCount > 0 && <div className="flex items-center gap-1.5 text-xs font-sans text-muted-foreground"><CalendarDays size={13} strokeWidth={1.8} />{meeting.decisionCount} Decisions</div>}
-        {meeting.riskCount > 0 && <div className="flex items-center gap-1.5 text-xs font-sans text-muted-foreground"><AlertTriangle size={13} strokeWidth={1.8} />{meeting.riskCount} Risks</div>}
+
+      {/* Pills */}
+      <div className="flex items-center gap-2 shrink-0">
+        {meeting.taskCount > 0 && (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans"
+            style={{ background: "color-mix(in oklch, var(--accent) 10%, transparent)", color: "var(--accent)" }}>
+            <CheckSquare size={10} strokeWidth={2} />{meeting.taskCount} tasks
+          </span>
+        )}
+        {meeting.decisionCount > 0 && (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans"
+            style={{ background: "color-mix(in oklch, var(--primary) 10%, transparent)", color: "var(--primary)" }}>
+            <CalendarDays size={10} strokeWidth={2} />{meeting.decisionCount} decisions
+          </span>
+        )}
+        {meeting.riskCount > 0 && (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans bg-red-50 text-red-500">
+            <AlertTriangle size={10} strokeWidth={2} />{meeting.riskCount} risks
+          </span>
+        )}
       </div>
-      <ChevronRight size={16} strokeWidth={1.8} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+
+      <ChevronRight size={15} strokeWidth={2} className="text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
     </Link>
   )
 }
@@ -307,44 +332,30 @@ export default function MeetingsListPage({ params }: PageProps) {
     <div className="flex flex-col h-full">
 
       {/* Page header */}
-      <div className="bg-card border-b border-border px-8 py-5 shrink-0">
-        <div className="flex items-center justify-between gap-4 mb-4">
+      <div className="bg-card border-b border-border px-8 pt-6 pb-0 shrink-0">
+        <div className="flex items-center justify-between gap-4 mb-5">
           <div>
-            <p className="text-xs text-muted-foreground font-sans mb-0.5">{projectName}</p>
-            <h1 className="text-xl font-bold text-foreground font-sans">Meetings</h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground font-sans mb-1">{projectName}</p>
+            <h1 className="text-2xl font-black text-foreground font-sans tracking-tight">Meetings</h1>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-sans font-medium text-primary-foreground transition-colors hover:opacity-90"
-            style={{ background: "var(--primary)" }}
-          >
-            <Plus size={14} strokeWidth={2.5} />
-            New Meeting
-          </button>
-        </div>
-
-        {/* Filter bar */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {[
-            { icon: <Filter size={12} strokeWidth={2} />, label: "Any Time" },
-            { icon: <CalendarDays size={12} strokeWidth={2} />, label: projectName },
-            { icon: <Users size={12} strokeWidth={2} />, label: "People" },
-          ].map((f) => (
-            <button key={f.label} className="flex items-center gap-1.5 px-3 h-8 rounded-lg border border-border bg-background text-xs font-sans text-muted-foreground hover:bg-secondary transition-colors">
-              {f.icon}
-              {f.label}
-              <ChevronDown size={11} strokeWidth={2} />
+          <div className="flex items-center gap-2">
+            {/* Search */}
+            <div className="flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-background text-xs font-sans text-muted-foreground">
+              <Search size={12} strokeWidth={2} />
+              <input className="bg-transparent outline-none w-40 placeholder:text-muted-foreground text-foreground" placeholder="Search meetings..." />
+            </div>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-sans font-semibold text-primary-foreground transition-all hover:opacity-90 hover:shadow-md"
+              style={{ background: "var(--primary)" }}
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              New Meeting
             </button>
-          ))}
-          <div className="ml-auto flex items-center gap-2 px-3 h-8 rounded-lg border border-border bg-background text-xs font-sans text-muted-foreground">
-            <Search size={12} strokeWidth={2} />
-            <input className="bg-transparent outline-none w-36 placeholder:text-muted-foreground text-foreground" placeholder="Search meetings..." />
           </div>
         </div>
-      </div>
 
-      {/* Sub-nav tabs */}
-      <div className="bg-card border-b border-border px-8 shrink-0">
+        {/* Sub-nav tabs */}
         <div className="flex items-center gap-0">
           {tabs.map((tab, i) => (
             <button
@@ -354,7 +365,9 @@ export default function MeetingsListPage({ params }: PageProps) {
               style={{ color: activeTab === i ? "var(--primary)" : "var(--muted-foreground)" }}
             >
               {tab}
-              {activeTab === i && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t" style={{ background: "var(--primary)" }} />}
+              {activeTab === i && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t" style={{ background: "var(--primary)" }} />
+              )}
             </button>
           ))}
         </div>
