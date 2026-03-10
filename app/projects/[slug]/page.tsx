@@ -308,7 +308,7 @@ export default function ProjectPage({ params }: PageProps) {
                   divideColor: "color-mix(in oklch, oklch(0.59 0.25 255) 12%, transparent)",
                 }}>
                 {/* decorative circle */}
-                <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-[0.07]" style={{ background: "oklch(0.59 0.25 255)" }} />
+                <div className="absolute -top-10 -right-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.59 0.25 255)" }} />
                 <div className="flex items-center justify-between pb-3 mb-1 border-b" style={{ borderColor: "color-mix(in oklch, oklch(0.59 0.25 255) 18%, transparent)" }}>
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.59 0.25 255)" }}>
@@ -360,7 +360,7 @@ export default function ProjectPage({ params }: PageProps) {
                   background: "color-mix(in oklch, oklch(0.62 0.22 150) 7%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.62 0.22 150) 22%, transparent)",
                 }}>
-                <div className="absolute -bottom-8 -right-8 w-28 h-28 rounded-full opacity-[0.07]" style={{ background: "oklch(0.62 0.22 150)" }} />
+                <div className="absolute -bottom-10 -right-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.62 0.22 150)" }} />
                 <div className="flex items-center justify-between mb-4 relative">
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.62 0.22 150)" }}>
@@ -404,7 +404,7 @@ export default function ProjectPage({ params }: PageProps) {
                   background: "color-mix(in oklch, oklch(0.78 0.20 55) 8%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.78 0.20 55) 25%, transparent)",
                 }}>
-                <div className="absolute -top-6 -left-6 w-24 h-24 rounded-full opacity-[0.07]" style={{ background: "oklch(0.78 0.20 55)" }} />
+                <div className="absolute -top-10 -left-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.78 0.20 55)" }} />
                 <div className="flex items-center justify-between mb-4 relative">
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.72 0.20 55)" }}>
@@ -452,8 +452,8 @@ export default function ProjectPage({ params }: PageProps) {
                   background: "color-mix(in oklch, oklch(0.70 0.16 200) 8%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.70 0.16 200) 22%, transparent)",
                 }}>
-                <div className="absolute -top-5 -right-5 w-20 h-20 rounded-full opacity-[0.08]" style={{ background: "oklch(0.70 0.16 200)" }} />
-                <div className="absolute bottom-2 left-2 w-12 h-12 rounded-full opacity-[0.05]" style={{ background: "oklch(0.70 0.16 200)" }} />
+                <div className="absolute -top-10 -right-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.70 0.16 200)" }} />
+                <div className="absolute -bottom-8 -left-8 w-[30%] aspect-square rounded-full opacity-[0.08]" style={{ background: "oklch(0.70 0.16 200)" }} />
                 <div className="flex items-center justify-between mb-4 relative">
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.60 0.18 200)" }}>
@@ -495,7 +495,7 @@ export default function ProjectPage({ params }: PageProps) {
                   background: "color-mix(in oklch, oklch(0.65 0.26 15) 7%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.65 0.26 15) 20%, transparent)",
                 }}>
-                <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full opacity-[0.07]" style={{ background: "oklch(0.65 0.26 15)" }} />
+                <div className="absolute -bottom-10 -right-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.65 0.26 15)" }} />
                 <div className="flex items-center gap-2 relative">
                   <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.65 0.26 15)" }}>
                     <CheckSquare size={11} color="white" strokeWidth={2.5} />
@@ -523,7 +523,7 @@ export default function ProjectPage({ params }: PageProps) {
                   background: "color-mix(in oklch, oklch(0.55 0.28 270) 7%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.55 0.28 270) 20%, transparent)",
                 }}>
-                <div className="absolute -top-6 -left-6 w-24 h-24 rounded-full opacity-[0.07]" style={{ background: "oklch(0.55 0.28 270)" }} />
+                <div className="absolute -top-10 -left-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.55 0.28 270)" }} />
                 <div className="flex items-center gap-2 relative">
                   <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.55 0.28 270)" }}>
                     <FileText size={11} color="white" strokeWidth={2.5} />
@@ -552,7 +552,7 @@ export default function ProjectPage({ params }: PageProps) {
               {/* Ask MetaPM */}
               <div className="rounded-xl border border-border p-5 overflow-hidden relative" style={{ background: "color-mix(in oklch, var(--primary) 6%, white)" }}>
                 <div
-                  className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10 -mr-8 -mt-8"
+                  className="absolute -top-10 -right-10 w-[45%] aspect-square rounded-full opacity-[0.14]"
                   style={{ background: "var(--primary)" }}
                 />
                 <div className="flex items-center gap-2 mb-3 relative">
@@ -592,7 +592,7 @@ export default function ProjectPage({ params }: PageProps) {
                   background: "color-mix(in oklch, oklch(0.58 0.30 293) 7%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.58 0.30 293) 20%, transparent)",
                 }}>
-                <div className="absolute -bottom-6 -right-6 w-28 h-28 rounded-full opacity-[0.07]" style={{ background: "oklch(0.58 0.30 293)" }} />
+                <div className="absolute -bottom-10 -right-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.58 0.30 293)" }} />
                 <div className="flex items-center gap-2 mb-4 relative">
                   <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.58 0.30 293)" }}>
                     <TrendingUp size={11} color="white" strokeWidth={2.5} />
@@ -626,7 +626,7 @@ export default function ProjectPage({ params }: PageProps) {
                   background: "color-mix(in oklch, oklch(0.72 0.20 55) 7%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.72 0.20 55) 22%, transparent)",
                 }}>
-                <div className="absolute -top-5 -right-5 w-20 h-20 rounded-full opacity-[0.07]" style={{ background: "oklch(0.72 0.20 55)" }} />
+                <div className="absolute -top-10 -right-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.72 0.20 55)" }} />
                 <div className="flex items-center gap-2 mb-3 relative">
                   <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.65 0.20 55)" }}>
                     <Sparkles size={11} color="white" strokeWidth={2.5} />
@@ -661,7 +661,7 @@ export default function ProjectPage({ params }: PageProps) {
                   background: "color-mix(in oklch, oklch(0.62 0.22 150) 7%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.62 0.22 150) 22%, transparent)",
                 }}>
-                <div className="absolute -bottom-5 -left-5 w-20 h-20 rounded-full opacity-[0.07]" style={{ background: "oklch(0.62 0.22 150)" }} />
+                <div className="absolute -bottom-10 -left-10 w-[45%] aspect-square rounded-full opacity-[0.13]" style={{ background: "oklch(0.62 0.22 150)" }} />
                 <div className="flex items-center gap-2 mb-3 relative">
                   <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.55 0.22 150)" }}>
                     <FileText size={11} color="white" strokeWidth={2.5} />

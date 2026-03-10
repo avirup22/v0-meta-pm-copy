@@ -204,13 +204,21 @@ export function AppSidebar() {
               {/* Customer header */}
               <button
                 onClick={() => toggleCustomer(c.customer.id)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-sans font-semibold transition-colors"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-sans font-semibold transition-all duration-150"
                 style={{
-                  color: hasActiveProject ? "var(--nav-fg)" : "var(--nav-muted)",
+                  color: "var(--nav-fg)",
                   background: "transparent",
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)" }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent" }}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget as HTMLButtonElement
+                  el.style.background = "var(--nav-hover-bg)"
+                  el.style.transform = "scale(1.01)"
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget as HTMLButtonElement
+                  el.style.background = "transparent"
+                  el.style.transform = "scale(1)"
+                }}
               >
                 <Building2 size={12} strokeWidth={2} className="shrink-0" />
                 <span className="flex-1 text-left truncate">{c.customer.name}</span>
@@ -255,10 +263,8 @@ export function AppSidebar() {
                           {/* Project name link */}
                           <Link
                             href={href}
-                            className="flex-1 py-1.5 pr-2 text-[11px] font-sans font-medium transition-colors truncate rounded-r-lg"
+                            className="flex-1 py-1.5 pr-2 text-[11px] font-sans font-semibold transition-all duration-150 truncate rounded-r-lg"
                             style={{ color: isActive ? "var(--nav-active-fg)" : "var(--nav-fg)" }}
-                            onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLAnchorElement).style.color = "var(--nav-fg)" }}
-                            onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLAnchorElement).style.color = "var(--nav-muted)" }}
                           >
                             {p.name}
                           </Link>
@@ -274,13 +280,25 @@ export function AppSidebar() {
                                 <Link
                                   key={subHref}
                                   href={subHref}
-                                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-sans transition-colors"
+                                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-sans font-medium transition-all duration-150"
                                   style={{
-                                    color: subActive ? "var(--nav-active-fg)" : "var(--nav-muted)",
+                                    color: subActive ? "var(--nav-active-fg)" : "var(--nav-fg)",
                                     background: subActive ? "var(--nav-active-bg)" : "transparent",
                                   }}
-                                  onMouseEnter={(e) => { if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)" }}
-                                  onMouseLeave={(e) => { if (!subActive) (e.currentTarget as HTMLAnchorElement).style.background = "transparent" }}
+                                  onMouseEnter={(e) => {
+                                    if (!subActive) {
+                                      const el = e.currentTarget as HTMLAnchorElement
+                                      el.style.background = "var(--nav-hover-bg)"
+                                      el.style.transform = "scale(1.02)"
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!subActive) {
+                                      const el = e.currentTarget as HTMLAnchorElement
+                                      el.style.background = "transparent"
+                                      el.style.transform = "scale(1)"
+                                    }
+                                  }}
                                 >
                                   <span className="shrink-0">{item.icon}</span>
                                   {item.label}
@@ -296,10 +314,20 @@ export function AppSidebar() {
                   {/* New project */}
                   <button
                     onClick={() => setNewProjectModal({ open: true, customerId: c.customer.id, customerName: c.customer.name })}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-sans transition-colors"
-                    style={{ color: "var(--nav-muted)" }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--nav-hover-bg)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--nav-fg)" }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--nav-muted)" }}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] font-sans font-medium transition-all duration-150"
+                    style={{ color: "var(--nav-fg)", opacity: 0.6 }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement
+                      el.style.background = "var(--nav-hover-bg)"
+                      el.style.opacity = "1"
+                      el.style.transform = "scale(1.02)"
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement
+                      el.style.background = "transparent"
+                      el.style.opacity = "0.6"
+                      el.style.transform = "scale(1)"
+                    }}
                   >
                     <Plus size={10} strokeWidth={2.5} />
                     New Project
@@ -384,21 +412,25 @@ function SidebarLink({
     <Link
       href={href}
       title={collapsed ? label : undefined}
-      className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-[13px] font-sans font-medium transition-colors"
+      className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-[13px] font-sans font-semibold transition-all duration-150"
       style={{
-        color: active ? "var(--nav-active-fg)" : "var(--nav-muted)",
+        color: active ? "var(--nav-active-fg)" : "var(--nav-fg)",
         background: active ? "var(--nav-active-bg)" : "transparent",
       }}
       onMouseEnter={(e) => {
         if (!active) {
-          (e.currentTarget as HTMLAnchorElement).style.background = "var(--nav-hover-bg)"
-          ;(e.currentTarget as HTMLAnchorElement).style.color = "var(--nav-fg)"
+          const el = e.currentTarget as HTMLAnchorElement
+          el.style.background = "var(--nav-hover-bg)"
+          el.style.color = "white"
+          el.style.transform = "scale(1.02)"
         }
       }}
       onMouseLeave={(e) => {
         if (!active) {
-          (e.currentTarget as HTMLAnchorElement).style.background = "transparent"
-          ;(e.currentTarget as HTMLAnchorElement).style.color = "var(--nav-muted)"
+          const el = e.currentTarget as HTMLAnchorElement
+          el.style.background = "transparent"
+          el.style.color = "var(--nav-fg)"
+          el.style.transform = "scale(1)"
         }
       }}
     >
