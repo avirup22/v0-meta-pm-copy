@@ -206,18 +206,18 @@ export default function ProjectPage({ params }: PageProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Page header bar */}
-      <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-border bg-card">
-        <span className="text-xs font-sans text-muted-foreground">
-          <Link href="/projects" className="hover:text-primary transition-colors">Projects</Link>
-          {" / "}
-          <span className="text-foreground font-medium">{projectName}</span>
-        </span>
+      <div className="flex items-center justify-between gap-3 px-6 py-3.5 border-b border-border bg-card shrink-0">
+        <div className="flex items-center gap-2 text-[11px] font-sans text-muted-foreground">
+          <Link href="/projects" className="hover:text-primary transition-colors font-medium">Projects</Link>
+          <ChevronRight size={11} strokeWidth={2.5} />
+          <span className="text-foreground font-semibold">{projectName}</span>
+        </div>
         <button
           onClick={loadData}
           disabled={loading}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-[11px] font-sans text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-lg hover:bg-secondary"
         >
-          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+          <RefreshCw size={11} strokeWidth={2} className={loading ? "animate-spin" : ""} />
           {loading ? "Loading..." : "Refresh"}
         </button>
       </div>
@@ -255,63 +255,58 @@ export default function ProjectPage({ params }: PageProps) {
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1.4fr)] gap-0 min-h-full">
 
             {/* ── LEFT COLUMN ── */}
-            <div className="border-r border-border p-6 flex flex-col gap-5">
-              {/* Title + action */}
+            <div className="border-r border-border p-6 flex flex-col gap-5 bg-card">
+              {/* Title block */}
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-foreground font-sans text-balance leading-tight">
+                <div className="flex flex-col gap-1">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground font-sans">{clientName}</p>
+                  <h1 className="text-xl font-black text-foreground font-sans text-balance leading-tight tracking-tight">
                     {projectName}
                   </h1>
-                  <p className="text-sm text-muted-foreground font-sans mt-0.5">
-                    Client: <span className="text-foreground font-medium">{clientName}</span>
-                  </p>
                 </div>
                 <Link
                   href={`/projects/${slug}/meetings`}
-                  className="shrink-0 flex items-center gap-1.5 text-xs font-sans font-medium px-3 py-1.5 rounded-lg border border-border hover:bg-secondary transition-colors text-foreground"
+                  className="shrink-0 flex items-center gap-1.5 text-[11px] font-sans font-semibold px-3 py-1.5 rounded-lg transition-colors text-primary-foreground"
+                  style={{ background: "var(--primary)" }}
                 >
-                  Manage Project
-                  <ChevronRight size={13} strokeWidth={2} />
+                  Meetings
+                  <ChevronRight size={12} strokeWidth={2.5} />
                 </Link>
               </div>
 
               {/* Timeline chips */}
               <div className="flex items-center gap-2 flex-wrap">
                 {[
-                  { icon: <Clock size={12} />,      label: `Start: ${startDate}` },
-                  { icon: <ArrowRight size={12} />,  label: `End: ${endDate}` },
+                  { icon: <Clock size={11} />, label: `Start: ${startDate}` },
+                  { icon: <ArrowRight size={11} />, label: `End: ${endDate}` },
                 ].map((chip) => (
                   <span
                     key={chip.label}
-                    className="flex items-center gap-1 text-xs font-sans text-muted-foreground bg-secondary border border-border px-2.5 py-1 rounded-full"
+                    className="flex items-center gap-1 text-[11px] font-sans text-muted-foreground bg-muted border border-border px-2.5 py-1 rounded-full"
                   >
                     {chip.icon}
                     {chip.label}
                   </span>
                 ))}
                 <span
-                  className="flex items-center gap-1 text-xs font-sans px-2.5 py-1 rounded-full font-medium"
+                  className="flex items-center gap-1 text-[11px] font-sans px-2.5 py-1 rounded-full font-semibold"
                   style={{
-                    background: status.toLowerCase() === "active"
-                      ? "oklch(0.9 0.12 145)"
-                      : "var(--secondary)",
-                    color: status.toLowerCase() === "active"
-                      ? "oklch(0.3 0.1 145)"
-                      : "var(--muted-foreground)",
+                    background: status.toLowerCase() === "active" ? "oklch(0.92 0.12 145)" : "var(--muted)",
+                    color: status.toLowerCase() === "active" ? "oklch(0.28 0.12 145)" : "var(--muted-foreground)",
                   }}
                 >
-                  <CheckSquare size={12} />
+                  <CheckSquare size={11} />
                   {status}
                 </span>
               </div>
 
               {/* Project overview table */}
               <div className="bg-card rounded-xl border border-border p-5 flex flex-col gap-0 divide-y divide-border">
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-border">
-                  <h2 className="text-sm font-semibold text-foreground font-sans">Project Overview</h2>
+                <div className="flex items-center justify-between pb-3 mb-1 border-b border-border">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-foreground font-sans">Project Overview</h2>
                   <button 
                     onClick={() => setEditModal("project")}
-                    className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors"
+                    className="text-[11px] font-semibold text-primary hover:text-primary/80 font-sans transition-colors px-2 py-1 rounded-md hover:bg-secondary"
                   >
                     Edit
                   </button>
@@ -420,7 +415,7 @@ export default function ProjectPage({ params }: PageProps) {
             </div>
 
             {/* ── MIDDLE COLUMN ── */}
-            <div className="border-r border-border p-6 flex flex-col gap-5">
+            <div className="border-r border-border p-6 flex flex-col gap-5 bg-background">
 
               {/* Recent Meetings stats */}
               <div className="bg-card rounded-xl border border-border p-5">
@@ -501,15 +496,21 @@ export default function ProjectPage({ params }: PageProps) {
             </div>
 
             {/* ── RIGHT COLUMN ── */}
-            <div className="p-6 flex flex-col gap-5 bg-secondary/30">
+            <div className="p-6 flex flex-col gap-5 bg-background">
 
               {/* Ask MetaPM */}
-              <div className="bg-card rounded-xl border border-border p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Sparkles size={14} style={{ color: "var(--primary)" }} />
-                  <h2 className="text-sm font-semibold text-foreground font-sans">Ask MetaPM</h2>
+              <div className="rounded-xl border border-border p-5 overflow-hidden relative" style={{ background: "color-mix(in oklch, var(--primary) 6%, white)" }}>
+                <div
+                  className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10 -mr-8 -mt-8"
+                  style={{ background: "var(--primary)" }}
+                />
+                <div className="flex items-center gap-2 mb-3 relative">
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: "var(--primary)" }}>
+                    <Sparkles size={12} color="white" />
+                  </div>
+                  <h2 className="text-sm font-bold text-foreground font-sans">Ask MetaPM</h2>
                 </div>
-                <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 mb-3 bg-background">
+                <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2.5 mb-3 bg-card relative">
                   <input
                     type="text"
                     value={askInput}
@@ -518,7 +519,7 @@ export default function ProjectPage({ params }: PageProps) {
                     className="flex-1 text-xs font-sans bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
                   />
                   <button className="text-muted-foreground hover:text-primary transition-colors" aria-label="Send">
-                    <Send size={14} />
+                    <Send size={13} />
                   </button>
                 </div>
                 <div className="flex flex-col gap-1.5">

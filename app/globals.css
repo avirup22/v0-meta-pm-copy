@@ -4,69 +4,68 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Base — pure bright white */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.13 0.02 260);
+  /* ── Base ── light grey page bg so pure-white cards pop */
+  --background: oklch(0.965 0.004 260);
+  --foreground: oklch(0.12 0.025 265);
 
-  /* Cards — white with crisp 1px borders */
+  /* ── Cards — bright white ── */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0.02 260);
+  --card-foreground: oklch(0.12 0.025 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0.02 260);
+  --popover-foreground: oklch(0.12 0.025 265);
 
-  /* Primary — Figma electric violet */
-  --primary: oklch(0.54 0.26 293);
+  /* ── Primary — vivid violet (#7C3AED family) ── */
+  --primary: oklch(0.52 0.28 293);
   --primary-foreground: oklch(1 0 0);
 
-  /* Secondary — very light violet tint */
-  --secondary: oklch(0.97 0.015 293);
-  --secondary-foreground: oklch(0.13 0.02 260);
+  /* ── Secondary — faint violet wash ── */
+  --secondary: oklch(0.97 0.012 293);
+  --secondary-foreground: oklch(0.25 0.05 265);
 
-  /* Muted */
-  --muted: oklch(0.96 0.008 260);
-  --muted-foreground: oklch(0.52 0.02 260);
+  /* ── Muted ── */
+  --muted: oklch(0.955 0.005 260);
+  --muted-foreground: oklch(0.50 0.018 265);
 
-  /* Accent — bright electric blue */
-  --accent: oklch(0.62 0.26 240);
+  /* ── Accent — electric indigo-blue ── */
+  --accent: oklch(0.59 0.25 255);
   --accent-foreground: oklch(1 0 0);
 
-  /* Destructive */
-  --destructive: oklch(0.577 0.245 27.325);
+  /* ── Destructive ── */
+  --destructive: oklch(0.58 0.24 27);
   --destructive-foreground: oklch(1 0 0);
 
-  /* Borders — very light, hairline */
-  --border: oklch(0.91 0.01 260);
-  --input: oklch(0.91 0.01 260);
-  --ring: oklch(0.54 0.26 293);
+  /* ── Borders — hairline ── */
+  --border: oklch(0.90 0.008 260);
+  --input: oklch(0.90 0.008 260);
+  --ring: oklch(0.52 0.28 293);
 
-  /* Charts */
-  --chart-1: oklch(0.54 0.26 293);
-  --chart-2: oklch(0.62 0.26 240);
-  --chart-3: oklch(0.72 0.22 160);
-  --chart-4: oklch(0.78 0.20 60);
-  --chart-5: oklch(0.68 0.24 15);
+  /* ── Charts ── */
+  --chart-1: oklch(0.52 0.28 293);
+  --chart-2: oklch(0.59 0.25 255);
+  --chart-3: oklch(0.68 0.20 155);
+  --chart-4: oklch(0.76 0.19 55);
+  --chart-5: oklch(0.66 0.24 15);
 
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
-  /* Navigation sidebar — deep charcoal, Figma-style */
-  --nav-bg: oklch(0.14 0.02 260);
-  --nav-fg: oklch(0.92 0 0);
-  --nav-muted: oklch(0.56 0.02 260);
-  --nav-border: oklch(0.22 0.02 260);
-  --nav-hover-bg: oklch(0.20 0.02 260);
-  --nav-active-bg: oklch(0.54 0.26 293);
+  /* ── Sidebar — deep violet-indigo ── */
+  --nav-bg: oklch(0.175 0.055 280);
+  --nav-fg: oklch(0.93 0.01 280);
+  --nav-muted: oklch(0.55 0.04 280);
+  --nav-border: oklch(0.25 0.05 280);
+  --nav-hover-bg: oklch(0.24 0.06 280);
+  --nav-active-bg: oklch(0.52 0.28 293);
   --nav-active-fg: oklch(1 0 0);
   --nav-logo: oklch(1 0 0);
 
-  /* Sidebar shadcn tokens */
-  --sidebar: oklch(0.14 0.02 260);
-  --sidebar-foreground: oklch(0.92 0 0);
-  --sidebar-primary: oklch(0.54 0.26 293);
+  --sidebar: oklch(0.175 0.055 280);
+  --sidebar-foreground: oklch(0.93 0.01 280);
+  --sidebar-primary: oklch(0.52 0.28 293);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.20 0.02 260);
-  --sidebar-accent-foreground: oklch(0.92 0 0);
-  --sidebar-border: oklch(0.22 0.02 260);
-  --sidebar-ring: oklch(0.54 0.26 293);
+  --sidebar-accent: oklch(0.24 0.06 280);
+  --sidebar-accent-foreground: oklch(0.93 0.01 280);
+  --sidebar-border: oklch(0.25 0.05 280);
+  --sidebar-ring: oklch(0.52 0.28 293);
 }
 
 /* 🎨 MABEL MODE 🎨 - Colorful Chaos Energy */
@@ -129,8 +128,8 @@ html.mabel-mode {
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-inter), 'Inter', 'system-ui', sans-serif;
+  --font-mono: var(--font-mono), 'JetBrains Mono', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

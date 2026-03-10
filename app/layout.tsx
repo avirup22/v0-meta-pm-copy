@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import { AuthProvider } from '@/contexts/auth-context'
 import { MabelModeProvider } from '@/contexts/mabel-mode-context'
 import { AppSidebar } from '@/components/app-sidebar'
 import { MabelModeToggle } from '@/components/mabel-mode-toggle'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const _inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: 'MetaPM – Project Manager',
@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="font-sans antialiased">
+      <body className={`${_inter.variable} ${_jetbrainsMono.variable} font-sans antialiased`}>
         <MabelModeProvider>
           <AuthProvider>
             <div className="flex h-screen overflow-hidden">
