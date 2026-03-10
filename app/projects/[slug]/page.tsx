@@ -301,12 +301,25 @@ export default function ProjectPage({ params }: PageProps) {
               </div>
 
               {/* Project overview table */}
-              <div className="bg-card rounded-xl border border-border p-5 flex flex-col gap-0 divide-y divide-border">
-                <div className="flex items-center justify-between pb-3 mb-1 border-b border-border">
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-foreground font-sans">Project Overview</h2>
+              <div className="rounded-xl border p-5 flex flex-col gap-0 divide-y overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.59 0.25 255) 7%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.59 0.25 255) 20%, transparent)",
+                  divideColor: "color-mix(in oklch, oklch(0.59 0.25 255) 12%, transparent)",
+                }}>
+                {/* decorative circle */}
+                <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-[0.07]" style={{ background: "oklch(0.59 0.25 255)" }} />
+                <div className="flex items-center justify-between pb-3 mb-1 border-b" style={{ borderColor: "color-mix(in oklch, oklch(0.59 0.25 255) 18%, transparent)" }}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.59 0.25 255)" }}>
+                      <FileText size={11} color="white" strokeWidth={2.5} />
+                    </div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-foreground font-sans">Project Overview</h2>
+                  </div>
                   <button 
                     onClick={() => setEditModal("project")}
-                    className="text-[11px] font-semibold text-primary hover:text-primary/80 font-sans transition-colors px-2 py-1 rounded-md hover:bg-secondary"
+                    className="text-[11px] font-semibold font-sans transition-colors px-2 py-1 rounded-md"
+                    style={{ color: "oklch(0.59 0.25 255)" }}
                   >
                     Edit
                   </button>
@@ -342,15 +355,23 @@ export default function ProjectPage({ params }: PageProps) {
               </div>
 
               {/* Internal Team */}
-              <div className="bg-card rounded-xl border border-border p-5">
-                <div className="flex items-center justify-between mb-4">
+              <div className="rounded-xl border p-5 overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.62 0.22 150) 7%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.62 0.22 150) 22%, transparent)",
+                }}>
+                <div className="absolute -bottom-8 -right-8 w-28 h-28 rounded-full opacity-[0.07]" style={{ background: "oklch(0.62 0.22 150)" }} />
+                <div className="flex items-center justify-between mb-4 relative">
                   <div className="flex items-center gap-2">
-                    <Users size={14} className="text-muted-foreground" />
-                    <h2 className="text-sm font-semibold text-foreground font-sans">Internal Team</h2>
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.62 0.22 150)" }}>
+                      <Users size={11} color="white" strokeWidth={2.5} />
+                    </div>
+                    <h2 className="text-sm font-bold text-foreground font-sans">Internal Team</h2>
                   </div>
                   <button 
                     onClick={() => setEditModal("internal-team")}
-                    className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors"
+                    className="text-[11px] font-semibold font-sans transition-colors px-2 py-1 rounded-md"
+                    style={{ color: "oklch(0.62 0.22 150)" }}
                   >
                     Edit
                   </button>
@@ -378,15 +399,23 @@ export default function ProjectPage({ params }: PageProps) {
               </div>
 
               {/* Client Team */}
-              <div className="bg-card rounded-xl border border-border p-5">
-                <div className="flex items-center justify-between mb-4">
+              <div className="rounded-xl border p-5 overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.78 0.20 55) 8%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.78 0.20 55) 25%, transparent)",
+                }}>
+                <div className="absolute -top-6 -left-6 w-24 h-24 rounded-full opacity-[0.07]" style={{ background: "oklch(0.78 0.20 55)" }} />
+                <div className="flex items-center justify-between mb-4 relative">
                   <div className="flex items-center gap-2">
-                    <Briefcase size={14} className="text-muted-foreground" />
-                    <h2 className="text-sm font-semibold text-foreground font-sans">Client Team</h2>
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.72 0.20 55)" }}>
+                      <Briefcase size={11} color="white" strokeWidth={2.5} />
+                    </div>
+                    <h2 className="text-sm font-bold text-foreground font-sans">Client Team</h2>
                   </div>
                   <button 
                     onClick={() => setEditModal("client-team")}
-                    className="text-xs text-primary hover:text-primary/80 font-sans font-medium transition-colors"
+                    className="text-[11px] font-semibold font-sans transition-colors px-2 py-1 rounded-md"
+                    style={{ color: "oklch(0.60 0.20 55)" }}
                   >
                     Edit
                   </button>
@@ -418,13 +447,21 @@ export default function ProjectPage({ params }: PageProps) {
             <div className="border-r border-border p-6 flex flex-col gap-5 bg-background">
 
               {/* Recent Meetings stats */}
-              <div className="bg-card rounded-xl border border-border p-5">
-                <div className="flex items-center justify-between mb-4">
+              <div className="rounded-xl border p-5 overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.70 0.16 200) 8%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.70 0.16 200) 22%, transparent)",
+                }}>
+                <div className="absolute -top-5 -right-5 w-20 h-20 rounded-full opacity-[0.08]" style={{ background: "oklch(0.70 0.16 200)" }} />
+                <div className="absolute bottom-2 left-2 w-12 h-12 rounded-full opacity-[0.05]" style={{ background: "oklch(0.70 0.16 200)" }} />
+                <div className="flex items-center justify-between mb-4 relative">
                   <div className="flex items-center gap-2">
-                    <TrendingUp size={14} className="text-muted-foreground" />
-                    <h2 className="text-sm font-semibold text-foreground font-sans">Recent Meetings</h2>
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.60 0.18 200)" }}>
+                      <TrendingUp size={11} color="white" strokeWidth={2.5} />
+                    </div>
+                    <h2 className="text-sm font-bold text-foreground font-sans">Recent Meetings</h2>
                   </div>
-                  <Link href={`/projects/${slug}/meetings`} className="text-xs text-primary hover:underline font-sans">
+                  <Link href={`/projects/${slug}/meetings`} className="text-[11px] font-semibold font-sans" style={{ color: "oklch(0.52 0.18 200)" }}>
                     View all
                   </Link>
                 </div>
@@ -453,10 +490,17 @@ export default function ProjectPage({ params }: PageProps) {
               </div>
 
               {/* Open Tasks placeholder */}
-              <div className="bg-card rounded-xl border border-border p-5 flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <CheckSquare size={14} className="text-muted-foreground" />
-                  <h2 className="text-sm font-semibold text-foreground font-sans">Open Tasks</h2>
+              <div className="rounded-xl border p-5 flex flex-col gap-3 overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.65 0.26 15) 7%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.65 0.26 15) 20%, transparent)",
+                }}>
+                <div className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full opacity-[0.07]" style={{ background: "oklch(0.65 0.26 15)" }} />
+                <div className="flex items-center gap-2 relative">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.65 0.26 15)" }}>
+                    <CheckSquare size={11} color="white" strokeWidth={2.5} />
+                  </div>
+                  <h2 className="text-sm font-bold text-foreground font-sans">Open Tasks</h2>
                 </div>
                 <div className="flex flex-col items-center justify-center py-8 gap-2">
                   <CheckSquare size={28} className="text-muted-foreground/40" />
@@ -474,10 +518,17 @@ export default function ProjectPage({ params }: PageProps) {
               </div>
 
               {/* Documents placeholder */}
-              <div className="bg-card rounded-xl border border-border p-5 flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <FileText size={14} className="text-muted-foreground" />
-                  <h2 className="text-sm font-semibold text-foreground font-sans">Documents</h2>
+              <div className="rounded-xl border p-5 flex flex-col gap-3 overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.55 0.28 270) 7%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.55 0.28 270) 20%, transparent)",
+                }}>
+                <div className="absolute -top-6 -left-6 w-24 h-24 rounded-full opacity-[0.07]" style={{ background: "oklch(0.55 0.28 270)" }} />
+                <div className="flex items-center gap-2 relative">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.55 0.28 270)" }}>
+                    <FileText size={11} color="white" strokeWidth={2.5} />
+                  </div>
+                  <h2 className="text-sm font-bold text-foreground font-sans">Documents</h2>
                 </div>
                 <div className="flex flex-col items-center justify-center py-8 gap-2">
                   <FileText size={28} className="text-muted-foreground/40" />
@@ -536,8 +587,18 @@ export default function ProjectPage({ params }: PageProps) {
               </div>
 
               {/* Quick Insights */}
-              <div className="bg-card rounded-xl border border-border p-5">
-                <h2 className="text-sm font-semibold text-foreground font-sans mb-4">Quick Insights</h2>
+              <div className="rounded-xl border p-5 overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.58 0.30 293) 7%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.58 0.30 293) 20%, transparent)",
+                }}>
+                <div className="absolute -bottom-6 -right-6 w-28 h-28 rounded-full opacity-[0.07]" style={{ background: "oklch(0.58 0.30 293)" }} />
+                <div className="flex items-center gap-2 mb-4 relative">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.58 0.30 293)" }}>
+                    <TrendingUp size={11} color="white" strokeWidth={2.5} />
+                  </div>
+                  <h2 className="text-sm font-bold text-foreground font-sans">Quick Insights</h2>
+                </div>
                 <ul className="flex flex-col divide-y divide-border">
                   {[
                     { icon: <CalendarDays  size={13} />, label: "Total Meetings", value: "—", alert: false },
@@ -560,19 +621,30 @@ export default function ProjectPage({ params }: PageProps) {
               </div>
 
               {/* Suggested Actions */}
-              <div className="bg-card rounded-xl border border-border p-5">
-                <h2 className="text-sm font-semibold text-foreground font-sans mb-3">Suggested Actions</h2>
-                <div className="flex flex-col gap-2">
+              <div className="rounded-xl border p-5 overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.72 0.20 55) 7%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.72 0.20 55) 22%, transparent)",
+                }}>
+                <div className="absolute -top-5 -right-5 w-20 h-20 rounded-full opacity-[0.07]" style={{ background: "oklch(0.72 0.20 55)" }} />
+                <div className="flex items-center gap-2 mb-3 relative">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.65 0.20 55)" }}>
+                    <Sparkles size={11} color="white" strokeWidth={2.5} />
+                  </div>
+                  <h2 className="text-sm font-bold text-foreground font-sans">Suggested Actions</h2>
+                </div>
+                <div className="flex flex-col gap-2 relative">
                   {SUGGESTED_ACTIONS.map((action) => (
                     <button
                       key={action}
-                      className="flex items-center justify-between w-full text-xs font-sans text-foreground px-3 py-2.5 rounded-lg border border-border hover:bg-secondary hover:border-primary/30 transition-colors text-left"
+                      className="flex items-center justify-between w-full text-xs font-sans text-foreground px-3 py-2.5 rounded-lg border bg-white/60 hover:bg-white transition-colors text-left"
+                      style={{ borderColor: "color-mix(in oklch, oklch(0.72 0.20 55) 25%, transparent)" }}
                     >
                       <div className="flex items-center gap-2">
-                        <FileText size={12} className="text-muted-foreground" />
+                        <FileText size={12} style={{ color: "oklch(0.60 0.20 55)" }} />
                         {action}
                       </div>
-                      <ChevronRight size={12} className="text-muted-foreground shrink-0" />
+                      <ChevronRight size={12} style={{ color: "oklch(0.60 0.20 55)" }} className="shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -584,13 +656,23 @@ export default function ProjectPage({ params }: PageProps) {
               )}
 
               {/* Export Insights */}
-              <div className="bg-card rounded-xl border border-border p-5">
-                <h2 className="text-sm font-semibold text-foreground font-sans mb-3">Export Insights</h2>
-                <ul className="flex flex-col divide-y divide-border">
+              <div className="rounded-xl border p-5 overflow-hidden relative"
+                style={{
+                  background: "color-mix(in oklch, oklch(0.62 0.22 150) 7%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.62 0.22 150) 22%, transparent)",
+                }}>
+                <div className="absolute -bottom-5 -left-5 w-20 h-20 rounded-full opacity-[0.07]" style={{ background: "oklch(0.62 0.22 150)" }} />
+                <div className="flex items-center gap-2 mb-3 relative">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.55 0.22 150)" }}>
+                    <FileText size={11} color="white" strokeWidth={2.5} />
+                  </div>
+                  <h2 className="text-sm font-bold text-foreground font-sans">Export Insights</h2>
+                </div>
+                <ul className="flex flex-col relative" style={{ borderTop: "1px solid color-mix(in oklch, oklch(0.62 0.22 150) 15%, transparent)" }}>
                   {EXPORT_ITEMS.map((item) => (
-                    <li key={item}>
-                      <button className="flex items-center gap-2.5 w-full py-2.5 hover:bg-secondary px-2 -mx-2 rounded-lg transition-colors text-left">
-                        <FileText size={13} className="text-muted-foreground shrink-0" />
+                    <li key={item} style={{ borderBottom: "1px solid color-mix(in oklch, oklch(0.62 0.22 150) 12%, transparent)" }}>
+                      <button className="flex items-center gap-2.5 w-full py-2.5 hover:bg-white/60 px-2 -mx-2 rounded-lg transition-colors text-left">
+                        <FileText size={13} style={{ color: "oklch(0.55 0.22 150)" }} className="shrink-0" />
                         <span className="text-xs font-sans text-foreground">{item}</span>
                       </button>
                     </li>
