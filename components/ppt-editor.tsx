@@ -4,7 +4,7 @@ import { useState } from "react"
 import JSZip from "jszip"
 import { Presentation, Download, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { listFolderFiles, fetchFileAsArrayBuffer, getDriveItemByPath, listFolderChildren } from "@/lib/graph"
+import { fetchFileAsArrayBuffer, getDriveItemByPath } from "@/lib/graph"
 
 interface PptEditorProps {
   /** The OneDrive folder ID of the project (meta_pm folder) */
@@ -48,6 +48,9 @@ function editPptxProjectScope(xmlContent: string, newText: string): string {
   return xmlContent.replace(/<a:t>([^<]*Project Scope[^<]*)<\/a:t>/g, `<a:t>${newText}</a:t>`)
 }
 
+// Fixed path to the global template in the MetaPM root folder
+const TEMPLATE_PATH = "MetaPM/template.pptx"
+
 export function PptEditor({ projectFolderId, projectName }: PptEditorProps) {
   const { token } = useAuth()
   const [status, setStatus] = useState<Status>("idle")
@@ -55,21 +58,6 @@ export function PptEditor({ projectFolderId, projectName }: PptEditorProps) {
   const [pptxName, setPptxName] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [shapesFound, setShapesFound] = useState<string[]>([])
-
-  async function findPptxInFolder(folderId: string): Promise<{ id: string; name: string } | null> {
-    const items = await listFolderFiles(token!, folderId)
-    const pptx = items.find((i) => i.name?.toLowerCase().endsWith(".pptx"))
-    if (pptx) return { id: pptx.id, name: pptx.name }
-
-    // Recurse into subfolders
-    for (const item of items) {
-      if (item.folder) {
-        const found = await findPptxInFolder(item.id)
-        if (found) return found
-      }
-    }
-    return null
-  }
 
   async function handleEdit() {
     if (!token) return
@@ -79,16 +67,13 @@ export function PptEditor({ projectFolderId, projectName }: PptEditorProps) {
     setPptxName(null)
 
     try {
-      // Locate the PPTX inside the project folder
-      const pptxItem = await findPptxInFolder(projectFolderId)
-      if (!pptxItem) {
-        throw new Error("No .pptx file found in the project folder.")
-      }
-      setPptxName(pptxItem.name)
+      // Resolve the template by its fixed global path: MetaPM/template.pptx
+      const templateItem = await getDriveItemByPath(token, TEMPLATE_PATH)
+      setPptxName(templateItem.name)
       setStatus("editing")
 
-      // Download the PPTX as binary
-      const buffer = await fetchFileAsArrayBuffer(token, pptxItem.id)
+      // Download the template as binary
+      const buffer = await fetchFileAsArrayBuffer(token, templateItem.id)
 
       // Unzip
       const zip = await JSZip.loadAsync(buffer)
