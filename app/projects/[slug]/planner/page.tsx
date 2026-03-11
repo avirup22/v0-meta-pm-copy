@@ -92,10 +92,10 @@ export default function PlannerPage({ params }: PageProps) {
         return
       }
 
-      // Step 2: find Planner plan by the real folder name
+      // Step 2: find Planner plan whose title exactly matches the drive folder name
       const plan = await fetchPlannerPlanByName(token!, realFolderName)
       if (!plan) {
-        setError(`No Planner plan found matching "${realFolderName}". Make sure a plan exists in Microsoft Planner with this project name.`)
+        setError(`No Planner plan found with title "${realFolderName}". The plan title in Microsoft Planner must exactly match the project folder name.`)
         setTasks([])
         setLoading(false)
         return

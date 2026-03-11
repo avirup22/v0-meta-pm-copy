@@ -909,7 +909,7 @@ export function plannerPriorityLabel(p: number): { label: string; color: string 
 
 /**
  * Fetch all Planner plans for the authenticated user, then find the one
- * whose title contains the given project name (case-insensitive).
+ * whose title exactly matches the given project name (case-insensitive).
  */
 export async function fetchPlannerPlanByName(
   token: string,
@@ -924,9 +924,9 @@ export async function fetchPlannerPlanByName(
   }
   const data = await res.json()
   const plans: PlannerPlan[] = data.value ?? []
-  // Match plan title containing the project name (slug-to-title friendly)
-  const needle = projectName.toLowerCase().replace(/-/g, " ")
-  return plans.find((p) => p.title.toLowerCase().replace(/_/g, " ").includes(needle)) ?? null
+  // Exact case-insensitive match on plan title
+  const targetTitle = projectName.toLowerCase()
+  return plans.find((p) => p.title.toLowerCase() === targetTitle) ?? null
 }
 
 /**
