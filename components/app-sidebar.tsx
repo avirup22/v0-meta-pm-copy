@@ -32,7 +32,7 @@ function toSlug(name: string) {
 
 const PROJECT_NAV = [
   { label: "Meetings",  suffix: "/meetings",  icon: <CalendarDays size={14} strokeWidth={2} /> },
-  { label: "Tasks",     suffix: "/tasks",     icon: <CheckSquare  size={14} strokeWidth={2} /> },
+  { label: "Planner",   suffix: "/planner",   icon: <CheckSquare  size={14} strokeWidth={2} /> },
   { label: "Documents", suffix: "/documents", icon: <FileText     size={14} strokeWidth={2} /> },
   { label: "PM Tools",  suffix: "/pm-tools",  icon: <Wrench       size={14} strokeWidth={2} /> },
 ]

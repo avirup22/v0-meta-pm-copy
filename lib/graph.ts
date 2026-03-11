@@ -876,6 +876,123 @@ export async function listFolderFiles(
   return data.value
 }
 
+// ─── Microsoft Planner ───────────────────────────────────────────────────────
+
+export interface PlannerPlan {
+  id: string
+  title: string
+  owner: string
+}
+
+export interface PlannerTask {
+  id: string
+  title: string
+  planId: string
+  startDateTime: string | null
+  dueDateTime: string | null
+  percentComplete: number
+  priority: number
+  assignments: Record<string, { assignedDateTime: string }>
+}
+
+export interface PlannerTaskWithAssignees extends PlannerTask {
+  assigneeNames: string[]
+}
+
+/** Priority label mapping per Microsoft Planner conventions */
+export function plannerPriorityLabel(p: number): { label: string; color: string } {
+  if (p === 1) return { label: "Urgent",    color: "oklch(0.55 0.26 25)" }
+  if (p === 3) return { label: "Important", color: "oklch(0.65 0.20 55)" }
+  if (p === 5) return { label: "Medium",    color: "oklch(0.55 0.20 240)" }
+  return           { label: "Low",       color: "oklch(0.55 0.15 150)" }
+}
+
+/**
+ * Fetch all Planner plans for the authenticated user, then find the one
+ * whose title contains the given project name (case-insensitive).
+ */
+export async function fetchPlannerPlanByName(
+  token: string,
+  projectName: string
+): Promise<PlannerPlan | null> {
+  const res = await fetch(`${GRAPH_BASE}/me/planner/plans`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.error?.message ?? `HTTP ${res.status}`)
+  }
+  const data = await res.json()
+  const plans: PlannerPlan[] = data.value ?? []
+  // Match plan title containing the project name (slug-to-title friendly)
+  const needle = projectName.toLowerCase().replace(/-/g, " ")
+  return plans.find((p) => p.title.toLowerCase().replace(/_/g, " ").includes(needle)) ?? null
+}
+
+/**
+ * Fetch all tasks for a Planner plan by plan ID.
+ */
+export async function fetchPlannerTasks(
+  token: string,
+  planId: string
+): Promise<PlannerTask[]> {
+  const res = await fetch(`${GRAPH_BASE}/planner/plans/${planId}/tasks`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.error?.message ?? `HTTP ${res.status}`)
+  }
+  const data = await res.json()
+  return data.value ?? []
+}
+
+/**
+ * Resolve a user ID to a display name via /users/{id}.
+ */
+export async function fetchUserDisplayName(
+  token: string,
+  userId: string
+): Promise<string> {
+  const res = await fetch(`${GRAPH_BASE}/users/${userId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return userId // fallback to ID if not found
+  const data = await res.json()
+  return data.displayName ?? userId
+}
+
+/**
+ * Fetch Planner tasks for a plan and resolve all assignee display names.
+ * Deduplicates user lookups so each unique user ID is fetched only once.
+ */
+export async function fetchPlannerTasksWithAssignees(
+  token: string,
+  planId: string
+): Promise<PlannerTaskWithAssignees[]> {
+  const tasks = await fetchPlannerTasks(token, planId)
+
+  // Collect unique user IDs across all tasks
+  const userIds = new Set<string>()
+  for (const task of tasks) {
+    for (const uid of Object.keys(task.assignments)) userIds.add(uid)
+  }
+
+  // Fetch all display names in parallel
+  const nameMap = new Map<string, string>()
+  await Promise.all(
+    Array.from(userIds).map(async (uid) => {
+      const name = await fetchUserDisplayName(token, uid)
+      nameMap.set(uid, name)
+    })
+  )
+
+  return tasks.map((task) => ({
+    ...task,
+    assigneeNames: Object.keys(task.assignments).map((uid) => nameMap.get(uid) ?? uid),
+  }))
+}
+
 /**
  * Download a Drive item as an ArrayBuffer (for binary files like PPTX).
  */

@@ -497,31 +497,51 @@ export default function ProjectPage({ params }: PageProps) {
                 </Link>
               </div>
 
-              {/* Open Tasks placeholder */}
+              {/* Planner */}
               <div className="rounded-xl border p-5 flex flex-col gap-3 overflow-hidden relative"
                 style={{
-                  background: "color-mix(in oklch, oklch(0.65 0.26 15) 7%, white)",
-                  borderColor: "color-mix(in oklch, oklch(0.65 0.26 15) 20%, transparent)",
+                  background: "color-mix(in oklch, oklch(0.55 0.20 240) 7%, white)",
+                  borderColor: "color-mix(in oklch, oklch(0.55 0.20 240) 20%, transparent)",
                 }}>
-                <div className="flex items-center gap-2 relative">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.65 0.26 15)" }}>
-                    <CheckSquare size={11} color="white" strokeWidth={2.5} />
+                <div className="absolute bottom-0 right-0 w-40 h-40 translate-y-10 translate-x-10 rounded-full opacity-25" style={{ background: "oklch(0.55 0.20 240)" }} />
+                <div className="flex items-center justify-between relative">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.55 0.20 240)" }}>
+                      <CheckSquare size={11} color="white" strokeWidth={2.5} />
+                    </div>
+                    <h2 className="text-sm font-bold text-foreground font-sans">Planner</h2>
                   </div>
-                  <h2 className="text-sm font-bold text-foreground font-sans">Open Tasks</h2>
-                </div>
-                <div className="flex flex-col items-center justify-center py-8 gap-2">
-                  <CheckSquare size={28} className="text-muted-foreground/40" />
-                  <p className="text-xs font-sans text-muted-foreground text-center">
-                    Tasks will appear here once meetings are processed
-                  </p>
-                  <Link
-                    href={`/projects/${slug}/meetings`}
-                    className="flex items-center gap-1 text-xs text-primary hover:underline font-sans mt-1"
-                  >
-                    Go to Meetings
-                    <ChevronRight size={12} />
+                  <Link href={`/projects/${slug}/planner`}
+                    className="text-[10px] font-semibold transition-colors"
+                    style={{ color: "oklch(0.55 0.20 240)" }}>
+                    View all
                   </Link>
                 </div>
+                <div className="grid grid-cols-2 gap-2 relative">
+                  {[
+                    { label: "Urgent",    color: "oklch(0.55 0.26 25)" },
+                    { label: "Important", color: "oklch(0.65 0.20 55)" },
+                  ].map((t) => (
+                    <div key={t.label} className="rounded-lg px-2.5 py-2 flex items-center gap-2 border"
+                      style={{
+                        background: `color-mix(in oklch, ${t.color} 8%, white)`,
+                        borderColor: `color-mix(in oklch, ${t.color} 20%, transparent)`,
+                      }}>
+                      <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: t.color }}>
+                        <CheckSquare size={9} color="white" strokeWidth={2.5} />
+                      </div>
+                      <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: t.color }}>{t.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <Link
+                  href={`/projects/${slug}/planner`}
+                  className="relative flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-[11px] font-semibold text-white transition-all hover:opacity-90"
+                  style={{ background: "oklch(0.55 0.20 240)" }}
+                >
+                  <CheckSquare size={11} strokeWidth={2.5} />
+                  Open Planner
+                </Link>
               </div>
 
               {/* Documents */}
