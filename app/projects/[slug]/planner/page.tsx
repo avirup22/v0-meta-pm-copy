@@ -405,8 +405,7 @@ export default function PlannerPage({ params }: PageProps) {
   )
 }
 
-// ─── Nudge Modal ──────────────────
-��──────────────────────────────────────────
+// --- Nudge Modal ---
 
 function NudgeModal({ token, nudge, project, onClose }: {
   token: string
