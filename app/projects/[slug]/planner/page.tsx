@@ -67,16 +67,14 @@ function isOverdue(iso: string | null): boolean {
 }
 
 const DEFAULT_BODY = (taskTitle: string, dueDate: string, assignees: string[]) =>
-  `Hi ${assignees.join(", ")},
-
-This is a friendly reminder regarding the following task assigned to you:
-
-Task: ${taskTitle}
-Due Date: ${dueDate}
-
-Could you please provide an update on the progress or let us know if there are any blockers?
-
-Thank you.`
+  `<p>Hi ${assignees.join(", ")},</p>
+<p>This is a friendly reminder regarding the following task assigned to you:</p>
+<table style="border-collapse:collapse;margin:8px 0;">
+  <tr><td style="padding:4px 12px 4px 0;font-weight:600;">Task</td><td style="padding:4px 0;">${taskTitle}</td></tr>
+  <tr><td style="padding:4px 12px 4px 0;font-weight:600;">Due Date</td><td style="padding:4px 0;">${dueDate}</td></tr>
+</table>
+<p>Could you please provide an update on the progress or let us know if there are any blockers?</p>
+<p>Thank you.</p>`
 
 const PRIORITY_ORDER = [1, 3, 5, 9]
 const FILTERS = ["All", "Urgent", "Important", "Medium", "Low"] as const

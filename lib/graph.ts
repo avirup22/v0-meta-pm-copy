@@ -1011,7 +1011,7 @@ export async function sendNudgeEmail(
     body: JSON.stringify({
       message: {
         subject,
-        body: { contentType: "Text", content: body },
+        body: { contentType: "HTML", content: body },
         toRecipients: to.map((addr) => ({ emailAddress: { address: addr } })),
       },
       saveToSentItems: true,
