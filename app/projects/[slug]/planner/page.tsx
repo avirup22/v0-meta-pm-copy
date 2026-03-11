@@ -43,6 +43,7 @@ interface NudgeTarget {
   taskId: string
   taskTitle: string
   assigneeNames: string[]
+  assigneeEmails: string[]
   dueDateTime: string | null
 }
 
@@ -165,6 +166,7 @@ export default function PlannerPage({ params }: PageProps) {
       taskId: task.id,
       taskTitle: task.title,
       assigneeNames: task.assigneeNames,
+      assigneeEmails: task.assignees.map((a) => a.email).filter(Boolean),
       dueDateTime: task.dueDateTime,
     })
   }
@@ -337,7 +339,7 @@ export default function PlannerPage({ params }: PageProps) {
   )
 }
 
-// ─── Nudge Modal ──────────────────────────────────────────────────────────────
+// ─── Nudge Modal ───────────────────��──────────────────────────────────────────
 
 function NudgeModal({ token, nudge, onClose }: {
   token: string
@@ -347,7 +349,7 @@ function NudgeModal({ token, nudge, onClose }: {
   const defaultSubject = `Reminder: ${nudge.taskTitle}`
   const defaultBody    = DEFAULT_BODY(nudge.taskTitle, formatDate(nudge.dueDateTime), nudge.assigneeNames)
 
-  const [to, setTo]           = useState(nudge.assigneeNames.join(", "))
+  const [to, setTo]           = useState(nudge.assigneeEmails.join(", "))
   const [subject, setSubject] = useState(defaultSubject)
   const [body, setBody]       = useState(defaultBody)
   const [sending, setSending] = useState(false)

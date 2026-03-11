@@ -895,8 +895,15 @@ export interface PlannerTask {
   assignments: Record<string, { assignedDateTime: string }>
 }
 
+export interface AssigneeInfo {
+  id: string
+  displayName: string
+  email: string
+}
+
 export interface PlannerTaskWithAssignees extends PlannerTask {
   assigneeNames: string[]
+  assignees: AssigneeInfo[]
 }
 
 /** Priority label mapping per Microsoft Planner conventions */
@@ -948,18 +955,22 @@ export async function fetchPlannerTasks(
 }
 
 /**
- * Resolve a user ID to a display name via /users/{id}.
+ * Resolve a user ID to display name + email via /users/{id}.
  */
-export async function fetchUserDisplayName(
+export async function fetchUserDetails(
   token: string,
   userId: string
-): Promise<string> {
+): Promise<AssigneeInfo> {
   const res = await fetch(`${GRAPH_BASE}/users/${userId}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (!res.ok) return userId // fallback to ID if not found
+  if (!res.ok) return { id: userId, displayName: userId, email: "" }
   const data = await res.json()
-  return data.displayName ?? userId
+  return {
+    id: userId,
+    displayName: data.displayName ?? userId,
+    email: data.mail ?? data.userPrincipalName ?? "",
+  }
 }
 
 /**
@@ -978,19 +989,25 @@ export async function fetchPlannerTasksWithAssignees(
     for (const uid of Object.keys(task.assignments)) userIds.add(uid)
   }
 
-  // Fetch all display names in parallel
-  const nameMap = new Map<string, string>()
+  // Fetch all user details in parallel
+  const userMap = new Map<string, AssigneeInfo>()
   await Promise.all(
     Array.from(userIds).map(async (uid) => {
-      const name = await fetchUserDisplayName(token, uid)
-      nameMap.set(uid, name)
+      const info = await fetchUserDetails(token, uid)
+      userMap.set(uid, info)
     })
   )
 
-  return tasks.map((task) => ({
-    ...task,
-    assigneeNames: Object.keys(task.assignments).map((uid) => nameMap.get(uid) ?? uid),
-  }))
+  return tasks.map((task) => {
+    const assigneeList = Object.keys(task.assignments).map(
+      (uid) => userMap.get(uid) ?? { id: uid, displayName: uid, email: "" }
+    )
+    return {
+      ...task,
+      assigneeNames: assigneeList.map((a) => a.displayName),
+      assignees: assigneeList,
+    }
+  })
 }
 
 /**
