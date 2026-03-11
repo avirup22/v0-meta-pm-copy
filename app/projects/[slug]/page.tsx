@@ -524,31 +524,50 @@ export default function ProjectPage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* Documents placeholder */}
+              {/* Documents */}
               <div className="rounded-xl border p-5 flex flex-col gap-3 overflow-hidden relative"
                 style={{
                   background: "color-mix(in oklch, oklch(0.55 0.28 270) 7%, white)",
                   borderColor: "color-mix(in oklch, oklch(0.55 0.28 270) 20%, transparent)",
                 }}>
-                <div className="flex items-center gap-2 relative">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.55 0.28 270)" }}>
-                    <FileText size={11} color="white" strokeWidth={2.5} />
+                <div className="flex items-center justify-between relative">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: "oklch(0.55 0.28 270)" }}>
+                      <FileText size={11} color="white" strokeWidth={2.5} />
+                    </div>
+                    <h2 className="text-sm font-bold text-foreground font-sans">Documents</h2>
                   </div>
-                  <h2 className="text-sm font-bold text-foreground font-sans">Documents</h2>
-                </div>
-                <div className="flex flex-col items-center justify-center py-8 gap-2">
-                  <FileText size={28} className="text-muted-foreground/40" />
-                  <p className="text-xs font-sans text-muted-foreground text-center">
-                    No documents linked yet
-                  </p>
-                  <Link
-                    href={`/projects/${slug}/documents`}
-                    className="flex items-center gap-1 text-xs text-primary hover:underline font-sans mt-1"
-                  >
-                    Go to Documents
-                    <ChevronRight size={12} />
+                  <Link href={`/projects/${slug}/documents`}
+                    className="text-[10px] font-semibold transition-colors"
+                    style={{ color: "oklch(0.55 0.28 270)" }}>
+                    View all
                   </Link>
                 </div>
+                {/* Mini stats */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "XLSX", count: 2, color: "oklch(0.55 0.22 150)" },
+                    { label: "DOCX", count: 1, color: "oklch(0.56 0.25 240)" },
+                    { label: "PPTX", count: 1, color: "oklch(0.70 0.20 35)" },
+                  ].map((t) => (
+                    <div key={t.label} className="rounded-lg px-2.5 py-2 flex flex-col gap-0.5 border"
+                      style={{
+                        background: `color-mix(in oklch, ${t.color} 8%, white)`,
+                        borderColor: `color-mix(in oklch, ${t.color} 20%, transparent)`,
+                      }}>
+                      <p className="text-base font-black leading-none" style={{ color: t.color }}>{t.count}</p>
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider" style={{ color: t.color }}>{t.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <Link
+                  href={`/projects/${slug}/documents`}
+                  className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-[11px] font-semibold text-white transition-all hover:opacity-90"
+                  style={{ background: "oklch(0.55 0.28 270)" }}
+                >
+                  <Sparkles size={11} strokeWidth={2.5} />
+                  Generate Documents
+                </Link>
               </div>
             </div>
 
