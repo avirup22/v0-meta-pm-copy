@@ -11,6 +11,7 @@ import {
   type MeetingDatabase,
 } from "@/lib/graph"
 import { NewMeetingModal } from "@/components/new-meeting-modal"
+import { DEMO_TOKEN, getDemoProjectBySlug, DEMO_MEETINGS } from "@/lib/demo-data"
 import {
   CalendarDays,
   CheckSquare,
@@ -173,7 +174,7 @@ const MOCK_MEETINGS: MeetingRecord[] = [
   { id: "project-kickoff-2026-05-14",   title: "Project Kickoff",    date: "2026-05-14", displayDate: "May 14", participants: 10, duration: 90, taskCount: 4, decisionCount: 4, hasTranscript: true,  hasMOM: true  },
 ]
 
-// ── MeetingRow ──��─────────────────────────────────────────────────────────────
+// ── MeetingRow ──���─────────────────────────────────────────────────────────────
 
 function MeetingRow({ meeting, projectSlug }: { meeting: MeetingRecord; projectSlug: string }) {
   const parts = meeting.displayDate.split(" ")
@@ -251,6 +252,31 @@ export default function MeetingsListPage({ params }: PageProps) {
     try {
       setLoading(true)
       setError(null)
+
+      // Demo mode: use static data
+      if (token === DEMO_TOKEN) {
+        const folder = getDemoProjectBySlug(slug)
+        if (folder) {
+          setProjectFolderId(folder.id)
+          const demoMtgs = DEMO_MEETINGS[folder.id] ?? []
+          const records: MeetingRecord[] = demoMtgs.map((m) => ({
+            id: m.id,
+            title: m.title,
+            date: m.date,
+            displayDate: formatDateDisplay(m.date),
+            organizer: m.organizer,
+            participants: m.participants,
+            taskCount: m.taskCount,
+            decisionCount: m.decisionCount,
+            riskCount: m.riskCount,
+          }))
+          setMeetings(records)
+        } else {
+          setMeetings([])
+        }
+        setLoading(false)
+        return
+      }
       
       // Get the project folder ID by matching slug to projects
       const customersWithProjects = await fetchAllCustomersWithProjects(token)

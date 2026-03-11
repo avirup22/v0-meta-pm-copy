@@ -4,10 +4,10 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
-import { Loader2, ShieldCheck } from "lucide-react"
+import { Loader2, ShieldCheck, FlaskConical } from "lucide-react"
 
 export default function AuthenticatePage() {
-  const { isAuthenticated, authenticate, error, loading } = useAuth()
+  const { isAuthenticated, authenticate, enterDemoMode, error, loading } = useAuth()
   const [tokenInput, setTokenInput] = useState("")
   const router = useRouter()
 
@@ -24,6 +24,11 @@ export default function AuthenticatePage() {
     if (!trimmed) return
     await authenticate(trimmed)
     // Navigation happens via the useEffect above once isAuthenticated flips true
+  }
+
+  function handleDemoMode() {
+    enterDemoMode()
+    // useEffect above will redirect to /projects once isAuthenticated flips true
   }
 
   return (
@@ -96,6 +101,39 @@ export default function AuthenticatePage() {
               {loading ? "Verifying..." : "Authenticate"}
             </Button>
           </form>
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs text-muted-foreground font-sans">or</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        {/* Demo mode */}
+        <div className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-3 overflow-hidden relative">
+          <div className="absolute top-0 right-0 w-28 h-28 -translate-y-8 translate-x-8 rounded-full opacity-20"
+            style={{ background: "oklch(0.70 0.16 200)" }} />
+          <div className="flex items-center gap-2 relative">
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: "oklch(0.58 0.18 200)" }}>
+              <FlaskConical size={13} color="white" strokeWidth={2} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground font-sans">Demo Mode</p>
+              <p className="text-[11px] text-muted-foreground font-sans leading-relaxed">
+                Explore MetaPM with sample data — no Microsoft account needed.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleDemoMode}
+            className="relative w-full h-10 rounded-xl text-sm font-semibold font-sans flex items-center justify-center gap-2 transition-all hover:opacity-90 hover:shadow-md"
+            style={{ background: "oklch(0.58 0.18 200)", color: "white" }}
+          >
+            <FlaskConical size={14} strokeWidth={2} />
+            Continue in Demo Mode
+          </button>
         </div>
       </div>
     </main>

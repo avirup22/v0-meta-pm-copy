@@ -26,6 +26,7 @@ import {
   fetchProjectDatabase,
   type ProjectDatabase,
 } from "@/lib/graph"
+import { DEMO_TOKEN, getDemoProjectBySlug, getDemoProjectDatabase, DEMO_MEETINGS } from "@/lib/demo-data"
 import { EditProjectModal } from "@/components/edit-project-modal"
 import { EditTeamModal } from "@/components/edit-team-modal"
 import { PptEditor } from "@/components/ppt-editor"
@@ -149,16 +150,25 @@ export default function ProjectPage({ params }: PageProps) {
     setLoading(true)
     setError(null)
     try {
-      // Step 1: resolve slug → OneDrive folder ID
-      const customers = await fetchAllCustomersWithProjects(token)
-      const allProjects = customers.flatMap((c) => c.projects)
-      const folder = allProjects.find((p) => toSlug(p.name) === slug)
-      if (!folder) throw new Error(`Project folder not found for slug: ${slug}`)
-      setFolderId(folder.id)
+      if (token === DEMO_TOKEN) {
+        // Demo mode: resolve from static data
+        const folder = getDemoProjectBySlug(slug)
+        if (!folder) throw new Error(`Demo project not found for slug: ${slug}`)
+        setFolderId(folder.id)
+        const data = getDemoProjectDatabase(folder.id)
+        setDb(data)
+      } else {
+        // Step 1: resolve slug → OneDrive folder ID
+        const customers = await fetchAllCustomersWithProjects(token)
+        const allProjects = customers.flatMap((c) => c.projects)
+        const folder = allProjects.find((p) => toSlug(p.name) === slug)
+        if (!folder) throw new Error(`Project folder not found for slug: ${slug}`)
+        setFolderId(folder.id)
 
-      // Step 2: fetch from Excel database
-      const data = await fetchProjectDatabase(token, folder.id)
-      setDb(data)
+        // Step 2: fetch from Excel database
+        const data = await fetchProjectDatabase(token, folder.id)
+        setDb(data)
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load project data")
     } finally {

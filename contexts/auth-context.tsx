@@ -8,12 +8,15 @@ import {
   useEffect,
   ReactNode,
 } from "react"
+import { DEMO_TOKEN } from "@/lib/demo-data"
 
 interface AuthContextValue {
   token: string | null
   displayName: string | null
   isAuthenticated: boolean
+  isDemoMode: boolean
   authenticate: (token: string) => Promise<void>
+  enterDemoMode: () => void
   logout: () => void
   error: string | null
   loading: boolean
@@ -21,12 +24,14 @@ interface AuthContextValue {
 
 const SESSION_TOKEN_KEY = "metapm_token"
 const SESSION_NAME_KEY = "metapm_display_name"
+const SESSION_DEMO_KEY = "metapm_demo_mode"
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
+  const [isDemoMode, setIsDemoMode] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [hydrated, setHydrated] = useState(false)
@@ -35,7 +40,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const savedToken = sessionStorage.getItem(SESSION_TOKEN_KEY)
     const savedName = sessionStorage.getItem(SESSION_NAME_KEY)
-    if (savedToken && savedName) {
+    const savedDemo = sessionStorage.getItem(SESSION_DEMO_KEY)
+    if (savedDemo === "true") {
+      setToken(DEMO_TOKEN)
+      setDisplayName("Demo User")
+      setIsDemoMode(true)
+    } else if (savedToken && savedName) {
       setToken(savedToken)
       setDisplayName(savedName)
     }
@@ -77,12 +87,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const enterDemoMode = useCallback(() => {
+    setToken(DEMO_TOKEN)
+    setDisplayName("Demo User")
+    setIsDemoMode(true)
+    setError(null)
+    sessionStorage.setItem(SESSION_DEMO_KEY, "true")
+    sessionStorage.setItem(SESSION_NAME_KEY, "Demo User")
+  }, [])
+
   const logout = useCallback(() => {
     setToken(null)
     setDisplayName(null)
+    setIsDemoMode(false)
     setError(null)
     sessionStorage.removeItem(SESSION_TOKEN_KEY)
     sessionStorage.removeItem(SESSION_NAME_KEY)
+    sessionStorage.removeItem(SESSION_DEMO_KEY)
   }, [])
 
   // Don't render children until we've restored session state
@@ -94,7 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         displayName,
         isAuthenticated: !!token,
+        isDemoMode,
         authenticate,
+        enterDemoMode,
         logout,
         error,
         loading,

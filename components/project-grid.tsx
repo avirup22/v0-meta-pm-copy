@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Loader2, RefreshCw, FolderOpen, Building2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { fetchAllCustomersWithProjects, type CustomerWithProjects } from "@/lib/graph"
+import { DEMO_TOKEN, DEMO_CUSTOMERS } from "@/lib/demo-data"
 
 function toSlug(name: string) {
   return name.toLowerCase().replace(/\s+/g, "-")
@@ -24,8 +25,12 @@ export function ProjectGrid() {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchAllCustomersWithProjects(token)
-      setCustomers(data)
+      if (token === DEMO_TOKEN) {
+        setCustomers(DEMO_CUSTOMERS)
+      } else {
+        const data = await fetchAllCustomersWithProjects(token)
+        setCustomers(data)
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to load projects"
       setError(message)

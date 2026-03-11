@@ -22,7 +22,9 @@ import {
   Loader2,
   Building2,
   Layers,
+  FlaskConical,
 } from "lucide-react"
+import { DEMO_TOKEN, DEMO_CUSTOMERS } from "@/lib/demo-data"
 
 function toSlug(name: string) {
   return name.toLowerCase().replace(/\s+/g, "-")
@@ -41,7 +43,7 @@ const BOTTOM_ITEMS = [
 ]
 
 export function AppSidebar() {
-  const { isAuthenticated, displayName, token, logout } = useAuth()
+  const { isAuthenticated, displayName, token, isDemoMode, logout } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
 
@@ -66,7 +68,9 @@ export function AppSidebar() {
     if (!token) return
     setLoadingProjects(true)
     try {
-      const data = await fetchAllCustomersWithProjects(token)
+      const data = token === DEMO_TOKEN
+        ? DEMO_CUSTOMERS
+        : await fetchAllCustomersWithProjects(token)
       setCustomers(data)
       if (data.length > 0) setOpenCustomerId(data[0].customer.id)
     } catch {
@@ -369,6 +373,19 @@ export function AppSidebar() {
           />
         ))}
 
+        {/* Demo mode badge */}
+        {isDemoMode && !collapsed && (
+          <div
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg mb-1"
+            style={{ background: "oklch(0.58 0.18 200 / 0.18)", border: "1px solid oklch(0.58 0.18 200 / 0.35)" }}
+          >
+            <FlaskConical size={11} strokeWidth={2} style={{ color: "oklch(0.80 0.16 200)" }} />
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "oklch(0.80 0.16 200)" }}>
+              Demo Mode
+            </span>
+          </div>
+        )}
+
         {/* User row */}
         <div
           className="flex items-center gap-2.5 mt-1 px-2 py-2 rounded-xl"
@@ -376,9 +393,9 @@ export function AppSidebar() {
         >
           <div
             className="w-7 h-7 rounded-lg shrink-0 flex items-center justify-center text-[11px] font-black font-sans"
-            style={{ background: "var(--primary)", color: "white" }}
+            style={{ background: isDemoMode ? "oklch(0.58 0.18 200)" : "var(--primary)", color: "white" }}
           >
-            {displayName?.[0]?.toUpperCase() ?? "U"}
+            {isDemoMode ? "D" : (displayName?.[0]?.toUpperCase() ?? "U")}
           </div>
           {!collapsed && (
             <>
