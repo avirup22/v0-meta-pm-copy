@@ -349,7 +349,7 @@ function NudgeModal({ token, nudge, onClose }: {
   const defaultSubject = `Reminder: ${nudge.taskTitle}`
   const defaultBody    = DEFAULT_BODY(nudge.taskTitle, formatDate(nudge.dueDateTime), nudge.assigneeNames)
 
-  const [to, setTo]           = useState(nudge.assigneeEmails.join(", "))
+  const [to, setTo]           = useState((nudge.assigneeEmails ?? []).join(", "))
   const [subject, setSubject] = useState(defaultSubject)
   const [body, setBody]       = useState(defaultBody)
   const [sending, setSending] = useState(false)
@@ -361,7 +361,31 @@ function NudgeModal({ token, nudge, onClose }: {
     setSendError(null)
     try {
       const toAddresses = to.split(",").map((s) => s.trim()).filter(Boolean)
-      await sendNudgeEmail(token, toAddresses, subject, body)
+
+      // Build request body exactly matching the Graph sendMail spec
+      const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: {
+            subject,
+            body: { contentType: "HTML", content: body },
+            toRecipients: toAddresses.map((addr) => ({
+              emailAddress: { address: addr },
+            })),
+          },
+          saveToSentItems: true,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+      }
+
       setSent(true)
       setTimeout(onClose, 1800)
     } catch (err) {
