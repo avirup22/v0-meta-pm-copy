@@ -4,6 +4,7 @@ import { use, useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import {
+  fetchAllCustomersWithProjects,
   fetchPlannerPlanByName,
   fetchPlannerTasksWithAssignees,
   plannerPriorityLabel,
@@ -30,6 +31,10 @@ import {
 
 interface PageProps {
   params: Promise<{ slug: string }>
+}
+
+function toSlug(name: string) {
+  return name.toLowerCase().replace(/\s+/g, "-")
 }
 
 function slugToTitle(slug: string) {
@@ -75,9 +80,22 @@ export default function PlannerPage({ params }: PageProps) {
     setLoading(true)
     setError(null)
     try {
-      const plan = await fetchPlannerPlanByName(token!, slug)
+      // Step 1: resolve slug → real drive folder name (the authoritative project name)
+      const customers = await fetchAllCustomersWithProjects(token!)
+      let realFolderName: string | null = null
+      for (const { projects } of customers) {
+        const match = projects.find((p) => toSlug(p.name) === slug)
+        if (match) { realFolderName = match.name; break }
+      }
+      if (!realFolderName) {
+        setError(`Project folder not found for "${slug}". Check that the project exists in your OneDrive MetaPM folder.`)
+        return
+      }
+
+      // Step 2: find Planner plan by the real folder name
+      const plan = await fetchPlannerPlanByName(token!, realFolderName)
       if (!plan) {
-        setError(`No Planner plan found matching "${projectTitle}". Make sure a plan exists in Microsoft Planner with this project name.`)
+        setError(`No Planner plan found matching "${realFolderName}". Make sure a plan exists in Microsoft Planner with this project name.`)
         setTasks([])
         setLoading(false)
         return
@@ -357,7 +375,7 @@ function TaskTable({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
   )
 }
 
-// ─── Board View ───────────────────────────────────────────────────────────────
+// ─── Board View ─────────────────────────────────────���─────────────────────────
 
 const BUCKET_PRIORITIES = [
   { label: "Urgent",    filter: (t: PlannerTaskWithAssignees) => t.priority === 1, color: "oklch(0.55 0.26 25)" },

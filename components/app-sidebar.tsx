@@ -54,16 +54,6 @@ export function AppSidebar() {
   const [loadingProjects, setLoadingProjects] = useState(false)
   const [newProjectModal, setNewProjectModal] = useState<{ open: boolean; customerId: string; customerName: string } | null>(null)
 
-  if (pathname === "/") return null
-  if (!isAuthenticated) return null
-
-  const projectSlugMatch = pathname.match(/^\/projects\/([^/]+)/)
-  const activeProjectSlug = projectSlugMatch ? projectSlugMatch[1] : null
-
-  const activeCustomer = activeProjectSlug
-    ? customers.find((c) => c.projects.some((p) => toSlug(p.name) === activeProjectSlug))
-    : null
-
   const loadProjects = useCallback(async () => {
     if (!token) return
     setLoadingProjects(true)
@@ -82,12 +72,18 @@ export function AppSidebar() {
 
   useEffect(() => {
     if (isAuthenticated) loadProjects()
-  }, [isAuthenticated, loadProjects])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, token])
 
-  useEffect(() => {
-    if (activeCustomer) setOpenCustomerId(activeCustomer.customer.id)
-    if (activeProjectSlug) setOpenProjectSlug(activeProjectSlug)
-  }, [activeCustomer, activeProjectSlug])
+  if (pathname === "/") return null
+  if (!isAuthenticated) return null
+
+  const projectSlugMatch = pathname.match(/^\/projects\/([^/]+)/)
+  const activeProjectSlug = projectSlugMatch ? projectSlugMatch[1] : null
+
+  const activeCustomer = activeProjectSlug
+    ? customers.find((c) => c.projects.some((p) => toSlug(p.name) === activeProjectSlug))
+    : null
 
   function toggleCustomer(id: string) {
     setOpenCustomerId((prev) => (prev === id ? null : id))
