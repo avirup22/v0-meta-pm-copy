@@ -1041,6 +1041,45 @@ export async function sendNudgeEmail(
 }
 
 /**
+ * Create a new task in a Planner plan via POST /planner/tasks.
+ * Returns the created task object.
+ */
+export async function createPlannerTask(
+  token: string,
+  planId: string,
+  payload: {
+    title: string
+    startDateTime?: string | null
+    dueDateTime?: string | null
+    priority?: number          // 1=Urgent 3=Important 5=Medium 9=Low
+    assignments?: Record<string, { "@odata.type": string; orderHint: string }>
+  }
+): Promise<PlannerTask> {
+  const body: Record<string, unknown> = {
+    planId,
+    title: payload.title,
+  }
+  if (payload.startDateTime) body.startDateTime = payload.startDateTime
+  if (payload.dueDateTime)   body.dueDateTime   = payload.dueDateTime
+  if (payload.priority != null) body.priority   = payload.priority
+  if (payload.assignments)   body.assignments   = payload.assignments
+
+  const res = await fetch(`${GRAPH_BASE}/planner/tasks`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+/**
  * Download a Drive item as an ArrayBuffer (for binary files like PPTX).
  */
 export async function fetchFileAsArrayBuffer(

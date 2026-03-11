@@ -7,6 +7,7 @@ import {
   fetchAllCustomersWithProjects,
   fetchPlannerPlanByName,
   fetchPlannerTasksWithAssignees,
+  createPlannerTask,
   plannerPriorityLabel,
   sendNudgeEmail,
   type PlannerTaskWithAssignees,
@@ -33,6 +34,8 @@ import {
   X,
   Send,
   Mail,
+  Plus,
+  Calendar,
 } from "lucide-react"
 
 interface PageProps {
@@ -155,7 +158,9 @@ export default function PlannerPage({ params }: PageProps) {
   const [search, setSearch]       = useState("")
   const [filter, setFilter]       = useState<typeof FILTERS[number]>("All")
   const [view, setView]           = useState<"table" | "board">("table")
-  const [nudge, setNudge]         = useState<NudgeTarget | null>(null)
+  const [nudge,        setNudge]        = useState<NudgeTarget | null>(null)
+  const [showAddTask,  setShowAddTask]  = useState(false)
+  const [planId,       setPlanId]       = useState<string | null>(null)
 
   const projectTitle = slugToTitle(slug)
 
@@ -187,6 +192,7 @@ export default function PlannerPage({ params }: PageProps) {
         return
       }
       setPlanTitle(plan.title)
+      setPlanId(plan.id)
       const fetched = await fetchPlannerTasksWithAssignees(token!, plan.id)
       fetched.sort((a, b) => {
         if (a.priority !== b.priority) return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority)
@@ -270,6 +276,15 @@ export default function PlannerPage({ params }: PageProps) {
             <RefreshCw size={11} strokeWidth={2} className={loading ? "animate-spin" : ""} />
             Refresh
           </button>
+          {planId && (
+            <button
+              onClick={() => setShowAddTask(true)}
+              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-90"
+              style={{ background: PLANNER_COLOR }}>
+              <Plus size={12} strokeWidth={2.5} />
+              Add Task
+            </button>
+          )}
         </div>
       </div>
 
@@ -401,6 +416,194 @@ export default function PlannerPage({ params }: PageProps) {
           onClose={() => setNudge(null)}
         />
       )}
+
+      {/* Add Task popup */}
+      {showAddTask && planId && (
+        <AddTaskModal
+          token={token!}
+          planId={planId}
+          onClose={() => setShowAddTask(false)}
+          onCreated={() => { setShowAddTask(false); load() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// --- Add Task Modal ---
+
+const PRIORITY_OPTIONS = [
+  { value: 1, label: "Urgent",    color: "oklch(0.55 0.26 25)" },
+  { value: 3, label: "Important", color: "oklch(0.65 0.20 55)" },
+  { value: 5, label: "Medium",    color: "oklch(0.55 0.20 240)" },
+  { value: 9, label: "Low",       color: "oklch(0.55 0.15 150)" },
+]
+
+function AddTaskModal({ token, planId, onClose, onCreated }: {
+  token: string
+  planId: string
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [title,     setTitle]     = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [dueDate,   setDueDate]   = useState("")
+  const [priority,  setPriority]  = useState<number>(5)
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState<string | null>(null)
+
+  const ringStyle = { "--tw-ring-color": `color-mix(in oklch, ${PLANNER_COLOR} 40%, transparent)` } as React.CSSProperties
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!title.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      await createPlannerTask(token, planId, {
+        title:         title.trim(),
+        startDateTime: startDate ? new Date(startDate).toISOString() : null,
+        dueDateTime:   dueDate   ? new Date(dueDate).toISOString()   : null,
+        priority,
+      })
+      onCreated()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create task")
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0"
+          style={{ background: `color-mix(in oklch, ${PLANNER_COLOR} 5%, white)` }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: PLANNER_COLOR }}>
+              <Plus size={13} color="white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <p className="text-sm font-black text-foreground font-sans">Add Task</p>
+              <p className="text-[10px] text-muted-foreground font-sans">Creates task directly in Microsoft Planner</p>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-secondary"
+            style={{ color: "var(--muted-foreground)" }}>
+            <X size={14} strokeWidth={2.5} />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleCreate} className="p-5 flex flex-col gap-4">
+
+          {/* Title */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground font-sans">
+              Task Title <span style={{ color: PLANNER_COLOR }}>*</span>
+            </label>
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Review design mockups"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-shadow"
+              style={ringStyle}
+              required
+            />
+          </div>
+
+          {/* Priority */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground font-sans flex items-center gap-1.5">
+              <Flag size={10} strokeWidth={2.5} /> Priority
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {PRIORITY_OPTIONS.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => setPriority(p.value)}
+                  className="px-2 py-2 rounded-lg border text-[11px] font-bold font-sans transition-all"
+                  style={priority === p.value
+                    ? { background: p.color, color: "white", borderColor: p.color }
+                    : { background: `color-mix(in oklch, ${p.color} 8%, white)`, color: p.color, borderColor: `color-mix(in oklch, ${p.color} 25%, transparent)` }
+                  }
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dates row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground font-sans flex items-center gap-1.5">
+                <Calendar size={10} strokeWidth={2.5} /> Start Date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-xs font-sans text-foreground focus:outline-none focus:ring-2 transition-shadow"
+                style={ringStyle}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground font-sans flex items-center gap-1.5">
+                <Calendar size={10} strokeWidth={2.5} /> Due Date
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                min={startDate || undefined}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-xs font-sans text-foreground focus:outline-none focus:ring-2 transition-shadow"
+                style={ringStyle}
+              />
+            </div>
+          </div>
+
+          {/* Plan info badge */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-sans"
+            style={{ background: `color-mix(in oklch, ${PLANNER_COLOR} 5%, white)`, borderColor: `color-mix(in oklch, ${PLANNER_COLOR} 20%, transparent)`, color: "var(--muted-foreground)" }}>
+            <CheckSquare size={11} strokeWidth={2} style={{ color: PLANNER_COLOR }} />
+            Task will be added to the active plan and appear on refresh
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border text-xs font-sans"
+              style={{ background: "color-mix(in oklch, oklch(0.60 0.26 25) 8%, white)", borderColor: "color-mix(in oklch, oklch(0.60 0.26 25) 25%, transparent)", color: "oklch(0.55 0.26 25)" }}>
+              <AlertTriangle size={12} strokeWidth={2} className="shrink-0 mt-0.5" />{error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-[10px] text-muted-foreground font-sans">Syncs directly to Microsoft Planner</p>
+            <div className="flex items-center gap-2.5">
+              <button type="button" onClick={onClose}
+                className="px-4 py-2 rounded-lg text-xs font-semibold font-sans border border-border transition-all hover:bg-secondary"
+                style={{ color: "var(--muted-foreground)" }}>
+                Cancel
+              </button>
+              <button type="submit" disabled={saving || !title.trim()}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-bold font-sans text-white transition-all hover:opacity-90 disabled:opacity-60"
+                style={{ background: PLANNER_COLOR }}>
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} strokeWidth={2.5} />}
+                {saving ? "Creating..." : "Create Task"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
