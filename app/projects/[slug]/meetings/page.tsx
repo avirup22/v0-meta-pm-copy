@@ -210,6 +210,7 @@ export default function MeetingsListPage({ params }: PageProps) {
         } else {
           setMeetings(MOCK_MEETINGS)
         }
+        setLoading(false)
         return
       }
       const customersWithProjects = await fetchAllCustomersWithProjects(token)
@@ -218,7 +219,12 @@ export default function MeetingsListPage({ params }: PageProps) {
         const p = projects.find((p) => p.name.toLowerCase().replace(/\s+/g, "-") === slug)
         if (p) { folderId = p.id; setProjectFolderId(p.id); break }
       }
-      if (!folderId) { setMeetings([]); return }
+      if (!folderId) {
+        setError(`No project folder found for "${slug}". Check that the project name matches exactly.`)
+        setMeetings([])
+        setLoading(false)
+        return
+      }
       const db = await fetchMeetingDatabase(token, folderId)
       setMeetings(db.meetings.map((m) => ({
         id: m.Meeting_ID,
@@ -233,7 +239,6 @@ export default function MeetingsListPage({ params }: PageProps) {
       })))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load meetings")
-      setMeetings(MOCK_MEETINGS)
     } finally {
       setLoading(false)
     }
