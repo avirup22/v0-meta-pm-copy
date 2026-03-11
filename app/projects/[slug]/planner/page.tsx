@@ -8,6 +8,7 @@ import {
   fetchPlannerPlanByName,
   fetchPlannerTasksWithAssignees,
   plannerPriorityLabel,
+  sendNudgeEmail,
   type PlannerTaskWithAssignees,
 } from "@/lib/graph"
 import {
@@ -28,11 +29,21 @@ import {
   Zap,
   Sparkles,
   CalendarClock,
-  ArrowUpRight,
+  Bell,
+  X,
+  Send,
+  Mail,
 } from "lucide-react"
 
 interface PageProps {
   params: Promise<{ slug: string }>
+}
+
+interface NudgeTarget {
+  taskId: string
+  taskTitle: string
+  assigneeNames: string[]
+  dueDateTime: string | null
 }
 
 function toSlug(name: string) {
@@ -55,22 +66,34 @@ function isOverdue(iso: string | null): boolean {
   return new Date(iso) < new Date()
 }
 
+const DEFAULT_BODY = (taskTitle: string, dueDate: string, assignees: string[]) =>
+  `Hi ${assignees.join(", ")},
+
+This is a friendly reminder regarding the following task assigned to you:
+
+Task: ${taskTitle}
+Due Date: ${dueDate}
+
+Could you please provide an update on the progress or let us know if there are any blockers?
+
+Thank you.`
+
 const PRIORITY_ORDER = [1, 3, 5, 9]
 const FILTERS = ["All", "Urgent", "Important", "Medium", "Low"] as const
-
 const PLANNER_COLOR = "oklch(0.55 0.20 240)"
 
 export default function PlannerPage({ params }: PageProps) {
   const { slug } = use(params)
   const { token, isAuthenticated } = useAuth()
 
-  const [tasks, setTasks] = useState<PlannerTaskWithAssignees[]>([])
+  const [tasks, setTasks]         = useState<PlannerTaskWithAssignees[]>([])
   const [planTitle, setPlanTitle] = useState<string>("")
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<typeof FILTERS[number]>("All")
-  const [view, setView] = useState<"table" | "board">("table")
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState<string | null>(null)
+  const [search, setSearch]       = useState("")
+  const [filter, setFilter]       = useState<typeof FILTERS[number]>("All")
+  const [view, setView]           = useState<"table" | "board">("table")
+  const [nudge, setNudge]         = useState<NudgeTarget | null>(null)
 
   const projectTitle = slugToTitle(slug)
 
@@ -125,24 +148,33 @@ export default function PlannerPage({ params }: PageProps) {
     })
   }, [tasks, search, filter])
 
-  const total      = tasks.length
-  const notStarted = tasks.filter((t) => t.percentComplete === 0).length
-  const inProgress = tasks.filter((t) => t.percentComplete > 0 && t.percentComplete < 100).length
-  const completed  = tasks.filter((t) => t.percentComplete === 100).length
-  const overdue    = tasks.filter((t) => t.percentComplete < 100 && isOverdue(t.dueDateTime)).length
+  const total       = tasks.length
+  const notStarted  = tasks.filter((t) => t.percentComplete === 0).length
+  const inProgress  = tasks.filter((t) => t.percentComplete > 0 && t.percentComplete < 100).length
+  const completed   = tasks.filter((t) => t.percentComplete === 100).length
+  const overdue     = tasks.filter((t) => t.percentComplete < 100 && isOverdue(t.dueDateTime)).length
 
   const STATS = [
-    { label: "Total Tasks",  value: total,      color: PLANNER_COLOR,            icon: <ListTodo size={15} color="white" strokeWidth={2} /> },
-    { label: "Not Started",  value: notStarted, color: "oklch(0.55 0.15 200)",   icon: <Circle size={15} color="white" strokeWidth={2} /> },
-    { label: "In Progress",  value: inProgress, color: "oklch(0.65 0.20 55)",    icon: <Clock size={15} color="white" strokeWidth={2} /> },
-    { label: "Completed",    value: completed,  color: "oklch(0.55 0.22 150)",   icon: <CheckCircle2 size={15} color="white" strokeWidth={2} /> },
-    { label: "Overdue",      value: overdue,    color: "oklch(0.60 0.26 25)",    icon: <AlertTriangle size={15} color="white" strokeWidth={2} /> },
+    { label: "Total Tasks",  value: total,      color: PLANNER_COLOR,          icon: <ListTodo size={15} color="white" strokeWidth={2} /> },
+    { label: "Not Started",  value: notStarted, color: "oklch(0.55 0.15 200)", icon: <Circle size={15} color="white" strokeWidth={2} /> },
+    { label: "In Progress",  value: inProgress, color: "oklch(0.65 0.20 55)",  icon: <Clock size={15} color="white" strokeWidth={2} /> },
+    { label: "Completed",    value: completed,  color: "oklch(0.55 0.22 150)", icon: <CheckCircle2 size={15} color="white" strokeWidth={2} /> },
+    { label: "Overdue",      value: overdue,    color: "oklch(0.60 0.26 25)",  icon: <AlertTriangle size={15} color="white" strokeWidth={2} /> },
   ]
+
+  function openNudge(task: PlannerTaskWithAssignees) {
+    setNudge({
+      taskId: task.id,
+      taskTitle: task.title,
+      assigneeNames: task.assigneeNames,
+      dueDateTime: task.dueDateTime,
+    })
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
-      {/* Page header — mirrors documents page */}
+      {/* Page header */}
       <div className="flex items-center justify-between gap-3 px-6 py-3.5 border-b border-border bg-card shrink-0">
         <div className="flex items-center gap-2 text-[11px] font-sans text-muted-foreground">
           <Link href="/projects" className="hover:text-primary transition-colors font-medium">Projects</Link>
@@ -153,47 +185,23 @@ export default function PlannerPage({ params }: PageProps) {
           {planTitle && (
             <>
               <ChevronRight size={11} strokeWidth={2.5} />
-              <span className="truncate max-w-48">{planTitle}</span>
+              <span className="truncate max-w-48 text-muted-foreground">{planTitle}</span>
             </>
           )}
         </div>
-
-        {/* View toggle + Refresh */}
         <div className="flex items-center gap-2">
           <div className="flex items-center rounded-lg border border-border overflow-hidden">
-            <button
-              onClick={() => setView("table")}
-              className="px-2.5 py-1.5 transition-colors"
-              style={{
-                background: view === "table" ? PLANNER_COLOR : "transparent",
-                color: view === "table" ? "white" : "var(--muted-foreground)",
-              }}
-              title="Table view"
-            >
-              <List size={13} strokeWidth={2} />
-            </button>
-            <button
-              onClick={() => setView("board")}
-              className="px-2.5 py-1.5 transition-colors"
-              style={{
-                background: view === "board" ? PLANNER_COLOR : "transparent",
-                color: view === "board" ? "white" : "var(--muted-foreground)",
-              }}
-              title="Board view"
-            >
-              <LayoutGrid size={13} strokeWidth={2} />
-            </button>
+            {(["table", "board"] as const).map((v) => (
+              <button key={v} onClick={() => setView(v)} className="px-2.5 py-1.5 transition-colors"
+                style={{ background: view === v ? PLANNER_COLOR : "transparent", color: view === v ? "white" : "var(--muted-foreground)" }}
+                title={v === "table" ? "Table view" : "Board view"}>
+                {v === "table" ? <List size={13} strokeWidth={2} /> : <LayoutGrid size={13} strokeWidth={2} />}
+              </button>
+            ))}
           </div>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all"
-            style={{
-              background: "transparent",
-              color: "var(--muted-foreground)",
-              border: "1px solid var(--border)",
-            }}
-          >
+          <button onClick={load} disabled={loading}
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-border transition-all hover:bg-secondary"
+            style={{ color: "var(--muted-foreground)" }}>
             <RefreshCw size={11} strokeWidth={2} className={loading ? "animate-spin" : ""} />
             Refresh
           </button>
@@ -206,19 +214,15 @@ export default function PlannerPage({ params }: PageProps) {
           {/* Stats row */}
           <div className="grid grid-cols-5 gap-3">
             {STATS.map((s) => (
-              <div
-                key={s.label}
-                className="rounded-xl border bg-card p-4 flex items-center gap-3 overflow-hidden relative"
-                style={{ borderColor: `color-mix(in oklch, ${s.color} 20%, transparent)` }}
-              >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: `color-mix(in oklch, ${s.color} 14%, white)` }}>
-                  {/* re-render with colour override */}
-                  <span style={{ color: s.color }}>
-                    {s.icon}
-                  </span>
+              <div key={s.label} className="rounded-xl border bg-card p-4 flex items-center gap-3 overflow-hidden relative"
+                style={{ borderColor: `color-mix(in oklch, ${s.color} 20%, transparent)` }}>
+                <div className="absolute top-0 right-0 w-16 h-16 -translate-y-6 translate-x-6 rounded-full opacity-15"
+                  style={{ background: s.color }} />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 relative"
+                  style={{ background: s.color }}>
+                  {s.icon}
                 </div>
-                <div>
+                <div className="relative">
                   <p className="text-xl font-black leading-none" style={{ color: s.color }}>{s.value}</p>
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-0.5">{s.label}</p>
                 </div>
@@ -226,36 +230,26 @@ export default function PlannerPage({ params }: PageProps) {
             ))}
           </div>
 
-          {/* AI Intelligence banner */}
-          <div
-            className="rounded-2xl border overflow-hidden relative"
-            style={{
-              background: `color-mix(in oklch, ${PLANNER_COLOR} 5%, white)`,
-              borderColor: `color-mix(in oklch, ${PLANNER_COLOR} 20%, transparent)`,
-            }}
-          >
-            {/* Bubble accent */}
-            <div className="absolute top-0 right-0 w-28 h-28 -translate-y-8 translate-x-8 rounded-full opacity-20"
-              style={{ background: PLANNER_COLOR }} />
-
+          {/* Intelligence banner */}
+          <div className="rounded-2xl border overflow-hidden relative"
+            style={{ background: `color-mix(in oklch, ${PLANNER_COLOR} 5%, white)`, borderColor: `color-mix(in oklch, ${PLANNER_COLOR} 20%, transparent)` }}>
+            <div className="absolute top-0 right-0 w-28 h-28 -translate-y-8 translate-x-8 rounded-full opacity-20" style={{ background: PLANNER_COLOR }} />
             <div className="p-5 relative flex items-start gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: PLANNER_COLOR }}>
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: PLANNER_COLOR }}>
                     <Sparkles size={14} color="white" strokeWidth={2} />
                   </div>
                   <div>
                     <p className="text-sm font-black text-foreground font-sans tracking-tight">Planner Intelligence</p>
                     <p className="text-[10px] text-muted-foreground font-sans">Live from Microsoft Planner · Auto-synced</p>
                   </div>
-                  <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider"
+                  <div className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider"
                     style={{ background: PLANNER_COLOR, color: "white" }}>
                     <Zap size={9} strokeWidth={2.5} />
                     Live
                   </div>
                 </div>
-                {/* Quick insight chips */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {[
                     overdue > 0 ? `${overdue} overdue task${overdue > 1 ? "s" : ""}` : "No overdue tasks",
@@ -263,14 +257,8 @@ export default function PlannerPage({ params }: PageProps) {
                     completed > 0 ? `${completed} completed` : "No completions yet",
                     `${total} total task${total !== 1 ? "s" : ""}`,
                   ].map((chip) => (
-                    <span
-                      key={chip}
-                      className="text-[10px] font-semibold font-sans px-2.5 py-1 rounded-full border bg-white"
-                      style={{
-                        color: PLANNER_COLOR,
-                        borderColor: `color-mix(in oklch, ${PLANNER_COLOR} 25%, transparent)`,
-                      }}
-                    >
+                    <span key={chip} className="text-[10px] font-semibold font-sans px-2.5 py-1 rounded-full border bg-white"
+                      style={{ color: PLANNER_COLOR, borderColor: `color-mix(in oklch, ${PLANNER_COLOR} 25%, transparent)` }}>
                       {chip}
                     </span>
                   ))}
@@ -283,32 +271,25 @@ export default function PlannerPage({ params }: PageProps) {
           <div className="flex items-center gap-3">
             <div className="relative flex-1 max-w-sm">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search tasks or assignees..."
                 className="w-full pl-8 pr-3 py-2 rounded-lg border border-border bg-card text-xs font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-shadow"
-                style={{ "--tw-ring-color": `color-mix(in oklch, ${PLANNER_COLOR} 40%, transparent)` } as React.CSSProperties}
-              />
+                style={{ "--tw-ring-color": `color-mix(in oklch, ${PLANNER_COLOR} 40%, transparent)` } as React.CSSProperties} />
             </div>
             <div className="flex items-center gap-1.5">
               {FILTERS.map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
+                <button key={f} onClick={() => setFilter(f)}
                   className="px-3 py-1.5 rounded-lg text-[11px] font-semibold font-sans border transition-all"
                   style={filter === f
                     ? { background: PLANNER_COLOR, color: "white", borderColor: PLANNER_COLOR }
-                    : { background: "var(--card)", color: "var(--muted-foreground)", borderColor: "var(--border)" }
-                  }
-                >
+                    : { background: "var(--card)", color: "var(--muted-foreground)", borderColor: "var(--border)" }}>
                   {f}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Content area */}
+          {/* Content */}
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-3 py-24">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
@@ -331,20 +312,173 @@ export default function PlannerPage({ params }: PageProps) {
                 <p className="text-sm font-bold text-foreground font-sans">Could not load Planner</p>
                 <p className="text-xs text-muted-foreground font-sans mt-1 max-w-md leading-relaxed">{error}</p>
               </div>
-              <button
-                onClick={load}
+              <button onClick={load}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
-                style={{ background: "oklch(0.60 0.26 25)" }}
-              >
+                style={{ background: "oklch(0.60 0.26 25)" }}>
                 <RefreshCw size={12} strokeWidth={2} />
                 Try again
               </button>
             </div>
           ) : view === "table" ? (
-            <TaskTable tasks={filtered} />
+            <TaskTable tasks={filtered} onNudge={openNudge} />
           ) : (
-            <BoardView tasks={filtered} />
+            <BoardView tasks={filtered} onNudge={openNudge} />
           )}
+        </div>
+      </div>
+
+      {/* Nudge compose popup */}
+      {nudge && (
+        <NudgeModal
+          token={token!}
+          nudge={nudge}
+          onClose={() => setNudge(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Nudge Modal ──────────────────────────────────────────────────────────────
+
+function NudgeModal({ token, nudge, onClose }: {
+  token: string
+  nudge: NudgeTarget
+  onClose: () => void
+}) {
+  const defaultSubject = `Reminder: ${nudge.taskTitle}`
+  const defaultBody    = DEFAULT_BODY(nudge.taskTitle, formatDate(nudge.dueDateTime), nudge.assigneeNames)
+
+  const [to, setTo]           = useState(nudge.assigneeNames.join(", "))
+  const [subject, setSubject] = useState(defaultSubject)
+  const [body, setBody]       = useState(defaultBody)
+  const [sending, setSending] = useState(false)
+  const [sent, setSent]       = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+
+  async function handleSend() {
+    setSending(true)
+    setSendError(null)
+    try {
+      const toAddresses = to.split(",").map((s) => s.trim()).filter(Boolean)
+      await sendNudgeEmail(token, toAddresses, subject, body)
+      setSent(true)
+      setTimeout(onClose, 1800)
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Failed to send email")
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    // Backdrop
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl flex flex-col overflow-hidden"
+        style={{ maxHeight: "90vh" }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0"
+          style={{ background: `color-mix(in oklch, ${PLANNER_COLOR} 5%, white)` }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: PLANNER_COLOR }}>
+              <Bell size={13} color="white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <p className="text-sm font-black text-foreground font-sans">Send Nudge</p>
+              <p className="text-[10px] text-muted-foreground font-sans truncate max-w-72">{nudge.taskTitle}</p>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-secondary"
+            style={{ color: "var(--muted-foreground)" }}>
+            <X size={14} strokeWidth={2.5} />
+          </button>
+        </div>
+
+        {/* Compose area */}
+        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+          {/* To */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground font-sans flex items-center gap-1.5">
+              <Mail size={10} strokeWidth={2.5} />
+              To
+            </label>
+            <input
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="email@example.com, ..."
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-xs font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 transition-shadow"
+              style={{ "--tw-ring-color": `color-mix(in oklch, ${PLANNER_COLOR} 40%, transparent)` } as React.CSSProperties}
+            />
+            <p className="text-[10px] text-muted-foreground font-sans">Separate multiple addresses with commas</p>
+          </div>
+
+          {/* Subject */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground font-sans">
+              Subject
+            </label>
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-xs font-sans text-foreground focus:outline-none focus:ring-2 transition-shadow"
+              style={{ "--tw-ring-color": `color-mix(in oklch, ${PLANNER_COLOR} 40%, transparent)` } as React.CSSProperties}
+            />
+          </div>
+
+          {/* Body */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground font-sans">
+              Message
+            </label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={10}
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-xs font-sans text-foreground leading-relaxed resize-none focus:outline-none focus:ring-2 transition-shadow"
+              style={{ "--tw-ring-color": `color-mix(in oklch, ${PLANNER_COLOR} 40%, transparent)` } as React.CSSProperties}
+            />
+          </div>
+
+          {sendError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border text-xs font-sans"
+              style={{ background: "color-mix(in oklch, oklch(0.60 0.26 25) 8%, white)", borderColor: "color-mix(in oklch, oklch(0.60 0.26 25) 25%, transparent)", color: "oklch(0.55 0.26 25)" }}>
+              <AlertTriangle size={12} strokeWidth={2} className="shrink-0 mt-0.5" />
+              {sendError}
+            </div>
+          )}
+
+          {sent && (
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-semibold font-sans"
+              style={{ background: "color-mix(in oklch, oklch(0.55 0.22 150) 8%, white)", borderColor: "color-mix(in oklch, oklch(0.55 0.22 150) 25%, transparent)", color: "oklch(0.45 0.22 150)" }}>
+              <CheckCircle2 size={12} strokeWidth={2.5} />
+              Nudge sent successfully!
+            </div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="px-5 py-4 border-t border-border bg-card flex items-center justify-end gap-2.5 shrink-0">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-lg text-xs font-semibold font-sans border border-border transition-all hover:bg-secondary"
+            style={{ color: "var(--muted-foreground)" }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSend}
+            disabled={sending || sent || !to.trim()}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-bold font-sans text-white transition-all hover:opacity-90 disabled:opacity-60"
+            style={{ background: sent ? "oklch(0.55 0.22 150)" : PLANNER_COLOR }}
+          >
+            {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} strokeWidth={2.5} />}
+            {sending ? "Sending..." : sent ? "Sent!" : "Send Nudge"}
+          </button>
         </div>
       </div>
     </div>
@@ -353,7 +487,7 @@ export default function PlannerPage({ params }: PageProps) {
 
 // ─── Table View ───────────────────────────────────────────────────────────────
 
-function TaskTable({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
+function TaskTable({ tasks, onNudge }: { tasks: PlannerTaskWithAssignees[]; onNudge: (t: PlannerTaskWithAssignees) => void }) {
   if (tasks.length === 0) {
     return (
       <div className="rounded-2xl border border-border flex flex-col items-center justify-center py-20 gap-3 bg-card">
@@ -374,8 +508,8 @@ function TaskTable({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
       <table className="w-full text-sm font-sans border-collapse">
         <thead>
           <tr style={{ background: "var(--secondary)", borderBottom: "1px solid var(--border)" }}>
-            {["Task", "Assignees", "Priority", "Start Date", "Due Date", "Status"].map((h) => (
-              <th key={h} className="text-left px-4 py-3 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+            {["Task", "Assignees", "Priority", "Start Date", "Due Date", "Status", ""].map((h, i) => (
+              <th key={i} className="text-left px-4 py-3 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
                 {h}
               </th>
             ))}
@@ -385,31 +519,26 @@ function TaskTable({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
           {tasks.map((task, i) => {
             const { label, color } = plannerPriorityLabel(task.priority)
             const overdue = task.percentComplete < 100 && isOverdue(task.dueDateTime)
-            const done = task.percentComplete === 100
-            const isAlt = i % 2 !== 0
+            const done    = task.percentComplete === 100
+            const isAlt   = i % 2 !== 0
             return (
-              <tr
-                key={task.id}
-                className="transition-colors"
-                style={{
-                  background: isAlt ? "var(--secondary)" : "white",
-                  borderBottom: "1px solid var(--border)",
-                }}
+              <tr key={task.id} className="transition-colors group"
+                style={{ background: isAlt ? "var(--secondary)" : "white", borderBottom: "1px solid var(--border)" }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in oklch, ${PLANNER_COLOR} 5%, white)` }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = isAlt ? "var(--secondary)" : "white" }}
-              >
+                onMouseLeave={(e) => { e.currentTarget.style.background = isAlt ? "var(--secondary)" : "white" }}>
+
                 {/* Title */}
                 <td className="px-4 py-3 max-w-xs">
                   <div className="flex items-start gap-2">
                     {done
                       ? <CheckCircle2 size={13} strokeWidth={2} className="shrink-0 mt-0.5" style={{ color: "oklch(0.55 0.22 150)" }} />
-                      : <Circle size={13} strokeWidth={2} className="shrink-0 mt-0.5" style={{ color: "var(--muted-foreground)", opacity: 0.4 }} />
-                    }
+                      : <Circle size={13} strokeWidth={2} className="shrink-0 mt-0.5" style={{ color: "var(--muted-foreground)", opacity: 0.4 }} />}
                     <span className={`text-xs font-medium leading-relaxed ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
                       {task.title}
                     </span>
                   </div>
                 </td>
+
                 {/* Assignees */}
                 <td className="px-4 py-3">
                   {task.assigneeNames.length === 0 ? (
@@ -427,6 +556,7 @@ function TaskTable({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
                     </div>
                   )}
                 </td>
+
                 {/* Priority */}
                 <td className="px-4 py-3">
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold"
@@ -435,6 +565,7 @@ function TaskTable({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
                     {label}
                   </span>
                 </td>
+
                 {/* Start Date */}
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -442,6 +573,7 @@ function TaskTable({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
                     {formatDate(task.startDateTime)}
                   </div>
                 </td>
+
                 {/* Due Date */}
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1 text-[11px] font-medium"
@@ -450,9 +582,15 @@ function TaskTable({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
                     {formatDate(task.dueDateTime)}
                   </div>
                 </td>
+
                 {/* Status */}
                 <td className="px-4 py-3">
                   <StatusPill percent={task.percentComplete} />
+                </td>
+
+                {/* Nudge */}
+                <td className="px-4 py-3">
+                  <NudgeButton onClick={() => onNudge(task)} disabled={done} />
                 </td>
               </tr>
             )
@@ -472,7 +610,7 @@ const BUCKETS = [
   { label: "Low",       filter: (t: PlannerTaskWithAssignees) => t.priority === 9, color: "oklch(0.55 0.15 150)" },
 ]
 
-function BoardView({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
+function BoardView({ tasks, onNudge }: { tasks: PlannerTaskWithAssignees[]; onNudge: (t: PlannerTaskWithAssignees) => void }) {
   return (
     <div className="grid grid-cols-4 gap-4 items-start">
       {BUCKETS.map(({ label, filter, color }) => {
@@ -480,13 +618,8 @@ function BoardView({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
         return (
           <div key={label} className="rounded-2xl border overflow-hidden"
             style={{ borderColor: `color-mix(in oklch, ${color} 22%, transparent)` }}>
-
-            {/* Column header */}
             <div className="px-4 py-3 flex items-center gap-2 border-b"
-              style={{
-                background: `color-mix(in oklch, ${color} 8%, white)`,
-                borderColor: `color-mix(in oklch, ${color} 18%, transparent)`,
-              }}>
+              style={{ background: `color-mix(in oklch, ${color} 8%, white)`, borderColor: `color-mix(in oklch, ${color} 18%, transparent)` }}>
               <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: color }}>
                 <Flag size={10} color="white" strokeWidth={2.5} />
               </div>
@@ -496,32 +629,25 @@ function BoardView({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
                 {group.length}
               </span>
             </div>
-
-            {/* Cards */}
             <div className="flex flex-col gap-px" style={{ background: "var(--border)" }}>
               {group.length === 0 ? (
-                <div className="bg-card px-4 py-8 text-center text-[11px] text-muted-foreground font-sans">
-                  No tasks
-                </div>
+                <div className="bg-card px-4 py-8 text-center text-[11px] text-muted-foreground font-sans">No tasks</div>
               ) : (
                 group.map((task) => {
                   const overdue = task.percentComplete < 100 && isOverdue(task.dueDateTime)
-                  const done = task.percentComplete === 100
+                  const done    = task.percentComplete === 100
                   return (
                     <div key={task.id} className="bg-card px-4 py-3 flex flex-col gap-2 transition-colors"
                       onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in oklch, ${color} 4%, white)` }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "white" }}>
-                      {/* Title */}
                       <div className="flex items-start gap-1.5">
                         {done
                           ? <CheckCircle2 size={12} strokeWidth={2} className="shrink-0 mt-0.5" style={{ color: "oklch(0.55 0.22 150)" }} />
-                          : <Circle size={12} strokeWidth={2} className="shrink-0 mt-0.5" style={{ color: "var(--muted-foreground)", opacity: 0.4 }} />
-                        }
+                          : <Circle size={12} strokeWidth={2} className="shrink-0 mt-0.5" style={{ color: "var(--muted-foreground)", opacity: 0.4 }} />}
                         <p className={`text-[11px] font-medium leading-relaxed flex-1 ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
                           {task.title}
                         </p>
                       </div>
-                      {/* Assignees */}
                       {task.assigneeNames.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {task.assigneeNames.map((name) => (
@@ -533,15 +659,14 @@ function BoardView({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
                           ))}
                         </div>
                       )}
-                      {/* Footer */}
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1 text-[10px] font-medium"
                           style={{ color: overdue ? "oklch(0.60 0.26 25)" : "var(--muted-foreground)" }}>
                           {overdue && <AlertTriangle size={9} strokeWidth={2.5} />}
                           <CalendarClock size={9} strokeWidth={2} />
                           {formatDate(task.dueDateTime)}
                         </div>
-                        <StatusPill percent={task.percentComplete} small />
+                        <NudgeButton onClick={() => onNudge(task)} disabled={done} small />
                       </div>
                     </div>
                   )
@@ -555,14 +680,39 @@ function BoardView({ tasks }: { tasks: PlannerTaskWithAssignees[] }) {
   )
 }
 
-// ─── Shared ───────────────────────────────────────────────────────────────────
+// ─── Shared components ────────────────────────────────────────────────────────
+
+function NudgeButton({ onClick, disabled, small }: { onClick: () => void; disabled?: boolean; small?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? "Task is completed" : "Send a nudge reminder"}
+      className={`inline-flex items-center gap-1 rounded-full font-bold transition-all border
+        ${small ? "text-[9px] px-1.5 py-0.5" : "text-[10px] px-2.5 py-1"}
+        ${disabled ? "opacity-30 cursor-not-allowed" : "hover:scale-105 animate-pulse hover:animate-none"}`}
+      style={{
+        background: disabled ? "var(--secondary)" : "color-mix(in oklch, oklch(0.65 0.20 55) 12%, white)",
+        color: disabled ? "var(--muted-foreground)" : "oklch(0.55 0.20 55)",
+        borderColor: disabled ? "var(--border)" : "color-mix(in oklch, oklch(0.65 0.20 55) 30%, transparent)",
+      }}
+    >
+      <Bell size={small ? 8 : 9} strokeWidth={2.5} />
+      {!small && "Nudge"}
+    </button>
+  )
+}
 
 function StatusPill({ percent, small }: { percent: number; small?: boolean }) {
-  const done = percent === 100
+  const done   = percent === 100
   const inProg = percent > 0 && percent < 100
-  const color = done ? "oklch(0.55 0.22 150)" : inProg ? "oklch(0.65 0.20 55)" : "oklch(0.55 0.15 200)"
-  const label = done ? "Done" : inProg ? "In Progress" : "Not Started"
-  const icon = done ? <CheckCircle2 size={small ? 8 : 9} strokeWidth={2.5} /> : inProg ? <Clock size={small ? 8 : 9} strokeWidth={2.5} /> : <Circle size={small ? 8 : 9} strokeWidth={2.5} />
+  const color  = done ? "oklch(0.55 0.22 150)" : inProg ? "oklch(0.65 0.20 55)" : "oklch(0.55 0.15 200)"
+  const label  = done ? "Done" : inProg ? "In Progress" : "Not Started"
+  const icon   = done
+    ? <CheckCircle2 size={small ? 8 : 9} strokeWidth={2.5} />
+    : inProg
+    ? <Clock size={small ? 8 : 9} strokeWidth={2.5} />
+    : <Circle size={small ? 8 : 9} strokeWidth={2.5} />
   return (
     <span className={`inline-flex items-center gap-1 rounded-full font-bold ${small ? "text-[9px] px-1.5 py-0.5" : "text-[10px] px-2.5 py-1"}`}
       style={{ background: `color-mix(in oklch, ${color} 12%, white)`, color }}>

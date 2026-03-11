@@ -994,6 +994,36 @@ export async function fetchPlannerTasksWithAssignees(
 }
 
 /**
+ * Send a reminder email from the authenticated user's Outlook mailbox via POST /me/sendMail.
+ */
+export async function sendNudgeEmail(
+  token: string,
+  to: string[],
+  subject: string,
+  body: string
+): Promise<void> {
+  const res = await fetch(`${GRAPH_BASE}/me/sendMail`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: { contentType: "Text", content: body },
+        toRecipients: to.map((addr) => ({ emailAddress: { address: addr } })),
+      },
+      saveToSentItems: true,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+}
+
+/**
  * Download a Drive item as an ArrayBuffer (for binary files like PPTX).
  */
 export async function fetchFileAsArrayBuffer(
