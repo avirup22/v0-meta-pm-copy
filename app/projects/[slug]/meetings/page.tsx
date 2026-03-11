@@ -1,13 +1,12 @@
 "use client"
 
-import { use, useState, useRef, useEffect } from "react"
+import { use, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import {
   fetchAllCustomersWithProjects,
   fetchMeetingDatabase,
-  sendTranscriptToWebhook,
   type MeetingDatabase,
 } from "@/lib/graph"
 import { NewMeetingModal } from "@/components/new-meeting-modal"
@@ -16,17 +15,19 @@ import {
   CalendarDays,
   CheckSquare,
   ChevronRight,
-  Clock,
-  Filter,
-  Search,
   Users,
   Plus,
-  X,
-  Upload,
   FileText,
   Loader2,
-  ChevronDown,
   AlertTriangle,
+  Search,
+  TrendingUp,
+  Mic,
+  BarChart3,
+  Clock,
+  ArrowUpRight,
+  Filter,
+  Sparkles,
 } from "lucide-react"
 
 interface PageProps {
@@ -37,104 +38,22 @@ function slugToTitle(slug: string) {
   return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
 }
 
-function toMeetingId(title: string, date: string) {
-  return `${title.toLowerCase().replace(/\s+/g, "-")}-${date}`
-}
-
-// Format Excel date (serial number) or dd-mm-yyyy string to display format
 function formatDateDisplay(value: string | number): string {
   if (!value) return "—"
-  
   const str = String(value).trim()
-  
-  // If it's already in dd-mm-yyyy format, parse and display
   if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
     const parts = str.split("-")
-    const day = parts[0]
-    const month = parts[1]
-    const year = parts[2]
-    const d = new Date(`${year}-${month}-${day}`)
-    if (!isNaN(d.getTime())) {
-      const monthName = d.toLocaleString("default", { month: "long" })
-      return `${monthName} ${parseInt(day)}`
-    }
+    const d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`)
+    if (!isNaN(d.getTime())) return `${d.toLocaleString("default", { month: "short" })} ${parseInt(parts[0])}`
     return str
   }
-  
-  // If it's formatted as dd-mm-xxxxx (Excel serial number as string with partial separator)
-  const parts = str.split("-")
-  if (parts.length === 3 && /^\d+$/.test(parts[2]) && parts[2].length > 4) {
-    const serialNum = parseInt(parts[2], 10)
-    if (serialNum > 1000) {
-      const excelEpoch = new Date(1900, 0, -1)
-      const date = new Date(excelEpoch.getTime() + serialNum * 86400000)
-      const monthName = date.toLocaleString("default", { month: "long" })
-      return `${monthName} ${date.getDate()}`
-    }
-  }
-  
-  // Try to parse as numeric serial (if it's a large number)
   const num = Number(str)
   if (!isNaN(num) && num > 1000) {
-    const excelEpoch = new Date(1900, 0, -1)
-    const date = new Date(excelEpoch.getTime() + num * 86400000)
-    const monthName = date.toLocaleString("default", { month: "long" })
-    return `${monthName} ${date.getDate()}`
+    const date = new Date(new Date(1900, 0, -1).getTime() + num * 86400000)
+    return `${date.toLocaleString("default", { month: "short" })} ${date.getDate()}`
   }
-  
   return str
 }
-
-// ── VTT parser (same as detail page) ─────────────────────────────────────────
-
-function extractCues(vtt: string): { speaker: string; text: string }[] {
-  let s = vtt.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-  const UUID_CUE_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[\d]+-[\d]+)/gi
-  s = s.replace(UUID_CUE_RE, "\n§CUE§$1\n")
-  const chunks = s.split(/\n§CUE§/)
-  const cues: { speaker: string; text: string }[] = []
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i].trim()
-    if (!chunk) continue
-    const tsMatch = chunk.match(/(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3})/)
-    if (!tsMatch) continue
-    const afterTs = chunk.slice(chunk.indexOf(tsMatch[0]) + tsMatch[0].length).trim()
-    let text = afterTs.replace(/<v [^>]+>/g, "").replace(/<\/v>/g, "").replace(/<[^>]+>/g, "").trim()
-    let speaker = ""
-    const vTagMatch = afterTs.match(/^<v ([^>]+)>/)
-    if (vTagMatch) {
-      speaker = vTagMatch[1].trim()
-    } else if (i > 0) {
-      const prevChunk = chunks[i - 1] ?? ""
-      const prevTsMatch = prevChunk.match(/\d{1,2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[.,]\d{3}/)
-      const afterPrevTs = prevTsMatch ? prevChunk.slice(prevChunk.indexOf(prevTsMatch[0]) + prevTsMatch[0].length) : prevChunk
-      const prevLines = afterPrevTs.split("\n").map((l) => l.replace(/<[^>]+>/g, "").trim()).filter(Boolean)
-      for (let j = prevLines.length - 1; j >= 0; j--) {
-        const candidate = prevLines[j]
-        if (!candidate.includes("-->") && !candidate.match(/^\d{1,2}:\d{2}/) && !candidate.match(/^[0-9a-f-]{8}/i) && !candidate.match(/^WEBVTT/i) && candidate.length < 80 && candidate.length > 1) {
-          if (cues.length > 0) cues[cues.length - 1].text = cues[cues.length - 1].text.replace(new RegExp(`\\s*${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`), "").trim()
-          speaker = candidate
-          break
-        }
-      }
-    }
-    if (text) cues.push({ speaker, text })
-  }
-  return cues
-}
-
-function vttToPlainText(vtt: string): string {
-  const cues = extractCues(vtt)
-  const merged: { speaker: string; text: string }[] = []
-  for (const cue of cues) {
-    const last = merged[merged.length - 1]
-    if (last && last.speaker === cue.speaker) last.text = last.text.trimEnd() + " " + cue.text
-    else merged.push({ ...cue })
-  }
-  return merged.map((m) => (m.speaker ? `${m.speaker}: ${m.text}` : m.text)).join("\n\n")
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface MeetingRecord {
   id: string
@@ -146,291 +65,361 @@ export interface MeetingRecord {
   taskCount: number
   decisionCount: number
   riskCount: number
+  hasTranscript?: boolean
+  hasMOM?: boolean
 }
-
-// ── Storage helpers (sessionStorage so no DB required) ────────────────────────
-
-function storageKey(slug: string) { return `metapm_meetings_${slug}` }
-
-function loadMeetings(slug: string): MeetingRecord[] {
-  if (typeof window === "undefined") return MOCK_MEETINGS
-  const raw = sessionStorage.getItem(storageKey(slug))
-  if (!raw) return MOCK_MEETINGS
-  try { return JSON.parse(raw) } catch { return MOCK_MEETINGS }
-}
-
-function saveMeetings(slug: string, meetings: MeetingRecord[]) {
-  if (typeof window === "undefined") return
-  sessionStorage.setItem(storageKey(slug), JSON.stringify(meetings))
-}
-
-// ── Mock seed data ─────────────────────────────────────────────────────────────
 
 const MOCK_MEETINGS: MeetingRecord[] = [
-  { id: "weekly-sync-2026-06-12",       title: "Weekly Sync",        date: "2026-06-12", displayDate: "June 12", participants: 5,  duration: 45, taskCount: 4, decisionCount: 2, hasTranscript: true,  hasMOM: true  },
-  { id: "planning-session-2026-06-05",  title: "Planning Session",   date: "2026-06-05", displayDate: "June 5",  participants: 7,  duration: 60, taskCount: 0, decisionCount: 3, hasTranscript: true,  hasMOM: false },
-  { id: "stakeholder-call-2026-06-30",  title: "Stakeholder Call",   date: "2026-06-30", displayDate: "June 30",participants: 4,  duration: 30, taskCount: 4, decisionCount: 0, hasTranscript: false, hasMOM: false },
-  { id: "client-review-2026-05-21",     title: "Client Review",      date: "2026-05-21", displayDate: "May 21", participants: 6,  duration: 50, taskCount: 4, decisionCount: 1, hasTranscript: true,  hasMOM: true  },
-  { id: "project-kickoff-2026-05-14",   title: "Project Kickoff",    date: "2026-05-14", displayDate: "May 14", participants: 10, duration: 90, taskCount: 4, decisionCount: 4, hasTranscript: true,  hasMOM: true  },
+  { id: "weekly-sync-2026-06-12",      title: "Weekly Sync",       date: "2026-06-12", displayDate: "Jun 12", organizer: "Alex M.",  participants: 5,  taskCount: 4, decisionCount: 2, riskCount: 1, hasTranscript: true,  hasMOM: true  },
+  { id: "planning-session-2026-06-05", title: "Planning Session",  date: "2026-06-05", displayDate: "Jun 5",  organizer: "Sara K.",  participants: 7,  taskCount: 0, decisionCount: 3, riskCount: 0, hasTranscript: true,  hasMOM: false },
+  { id: "stakeholder-call-2026-06-30", title: "Stakeholder Call",  date: "2026-06-30", displayDate: "Jun 30", organizer: "John D.",  participants: 4,  taskCount: 4, decisionCount: 0, riskCount: 2, hasTranscript: false, hasMOM: false },
+  { id: "client-review-2026-05-21",    title: "Client Review",     date: "2026-05-21", displayDate: "May 21", organizer: "Sara K.",  participants: 6,  taskCount: 4, decisionCount: 1, riskCount: 1, hasTranscript: true,  hasMOM: true  },
+  { id: "project-kickoff-2026-05-14",  title: "Project Kickoff",   date: "2026-05-14", displayDate: "May 14", organizer: "Alex M.", participants: 10, taskCount: 4, decisionCount: 4, riskCount: 0, hasTranscript: true,  hasMOM: true  },
 ]
 
-// ── MeetingRow ──���─────────────────────────────────────────────────────────────
+// ── Meeting type colour map ────────────────────────────────────────────────────
+function colorForTitle(title: string) {
+  const t = title.toLowerCase()
+  if (t.includes("kickoff"))    return { color: "oklch(0.70 0.20 35)",   bg: "color-mix(in oklch, oklch(0.70 0.20 35) 12%, white)" }
+  if (t.includes("planning"))   return { color: "oklch(0.58 0.30 293)",  bg: "color-mix(in oklch, oklch(0.58 0.30 293) 10%, white)" }
+  if (t.includes("stakeholder") || t.includes("client")) return { color: "oklch(0.56 0.25 240)", bg: "color-mix(in oklch, oklch(0.56 0.25 240) 10%, white)" }
+  if (t.includes("review"))     return { color: "oklch(0.55 0.22 150)",  bg: "color-mix(in oklch, oklch(0.55 0.22 150) 10%, white)" }
+  return { color: "oklch(0.63 0.20 195)", bg: "color-mix(in oklch, oklch(0.63 0.20 195) 10%, white)" }
+}
 
-function MeetingRow({ meeting, projectSlug }: { meeting: MeetingRecord; projectSlug: string }) {
-  const parts = meeting.displayDate.split(" ")
-  const month = parts[0] ?? ""
-  const day = parts[1] ?? ""
+// ── MeetingCard ───────────────────────────────────────────────────────────────
+function MeetingCard({ meeting, projectSlug }: { meeting: MeetingRecord; projectSlug: string }) {
+  const accent = colorForTitle(meeting.title)
+  const [month, day] = meeting.displayDate.split(" ")
+
   return (
     <Link
       href={`/projects/${projectSlug}/meetings/${meeting.id}`}
-      className="group flex items-center gap-5 px-6 py-4 bg-card hover:bg-secondary/40 border-b border-border transition-colors"
+      className="group relative flex flex-col gap-3 rounded-2xl border bg-card p-4 overflow-hidden transition-all duration-200 hover:-translate-y-0.5"
+      style={{
+        borderColor: `color-mix(in oklch, ${accent.color} 22%, var(--border))`,
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 10px 32px -6px ${accent.color}30`
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none"
+      }}
     >
-      {/* Date badge */}
-      <div
-        className="flex flex-col items-center justify-center w-12 h-12 rounded-xl shrink-0 font-sans"
-        style={{ background: "color-mix(in oklch, var(--primary) 10%, transparent)" }}
-      >
-        <span className="text-[8px] font-bold uppercase leading-none tracking-wider" style={{ color: "var(--primary)" }}>{month}</span>
-        <span className="text-lg font-black leading-tight" style={{ color: "var(--primary)" }}>{day}</span>
-      </div>
+      {/* Accent bar top */}
+      <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-2xl"
+        style={{ background: accent.color }} />
 
-      {/* Title + meta */}
-      <div className="flex flex-col gap-1 flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-foreground font-sans group-hover:text-primary transition-colors truncate">
-          {meeting.title}
-        </h3>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground font-sans">
-          {meeting.organizer && <span>{meeting.organizer}</span>}
-          <span className="flex items-center gap-1"><Users size={10} strokeWidth={2} />{meeting.participants}</span>
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2 mt-1">
+        {/* Date badge */}
+        <div className="flex flex-col items-center justify-center w-11 h-11 rounded-xl shrink-0"
+          style={{ background: accent.bg }}>
+          <span className="text-[8px] font-black uppercase leading-none tracking-wide" style={{ color: accent.color }}>{month}</span>
+          <span className="text-base font-black leading-tight" style={{ color: accent.color }}>{day}</span>
         </div>
+
+        {/* Title */}
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-foreground font-sans leading-tight group-hover:text-primary transition-colors line-clamp-1">
+            {meeting.title}
+          </h3>
+          {meeting.organizer && (
+            <p className="text-[10px] text-muted-foreground font-sans mt-0.5">{meeting.organizer}</p>
+          )}
+        </div>
+
+        <ArrowUpRight size={14} strokeWidth={2.5} className="shrink-0 text-muted-foreground/30 group-hover:text-primary transition-colors" />
       </div>
 
-      {/* Pills */}
-      <div className="flex items-center gap-2 shrink-0">
+      {/* Participants */}
+      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-sans">
+        <Users size={10} strokeWidth={2} />
+        <span>{meeting.participants} participants</span>
+        {(meeting.hasTranscript) && (
+          <>
+            <span className="mx-1 opacity-30">·</span>
+            <Mic size={10} strokeWidth={2} />
+            <span>Transcript</span>
+          </>
+        )}
+      </div>
+
+      {/* Stat pills */}
+      <div className="flex items-center gap-1.5 flex-wrap">
         {meeting.taskCount > 0 && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans"
-            style={{ background: "color-mix(in oklch, var(--accent) 10%, transparent)", color: "var(--accent)" }}>
-            <CheckSquare size={10} strokeWidth={2} />{meeting.taskCount} tasks
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+            style={{ background: "color-mix(in oklch, oklch(0.55 0.22 150) 10%, white)", color: "oklch(0.35 0.18 150)", border: "1px solid color-mix(in oklch, oklch(0.55 0.22 150) 20%, transparent)" }}>
+            <CheckSquare size={9} strokeWidth={2.5} />{meeting.taskCount} tasks
           </span>
         )}
         {meeting.decisionCount > 0 && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans"
-            style={{ background: "color-mix(in oklch, var(--primary) 10%, transparent)", color: "var(--primary)" }}>
-            <CalendarDays size={10} strokeWidth={2} />{meeting.decisionCount} decisions
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+            style={{ background: "color-mix(in oklch, oklch(0.58 0.30 293) 10%, white)", color: "oklch(0.35 0.22 293)", border: "1px solid color-mix(in oklch, oklch(0.58 0.30 293) 20%, transparent)" }}>
+            <CalendarDays size={9} strokeWidth={2.5} />{meeting.decisionCount} decisions
           </span>
         )}
         {meeting.riskCount > 0 && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans bg-red-50 text-red-500">
-            <AlertTriangle size={10} strokeWidth={2} />{meeting.riskCount} risks
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+            style={{ background: "color-mix(in oklch, oklch(0.62 0.24 15) 10%, white)", color: "oklch(0.38 0.20 15)", border: "1px solid color-mix(in oklch, oklch(0.62 0.24 15) 20%, transparent)" }}>
+            <AlertTriangle size={9} strokeWidth={2.5} />{meeting.riskCount} risks
+          </span>
+        )}
+        {meeting.hasMOM && (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+            style={{ background: "color-mix(in oklch, oklch(0.56 0.25 240) 10%, white)", color: "oklch(0.35 0.20 240)", border: "1px solid color-mix(in oklch, oklch(0.56 0.25 240) 20%, transparent)" }}>
+            <FileText size={9} strokeWidth={2.5} />MOM
           </span>
         )}
       </div>
-
-      <ChevronRight size={15} strokeWidth={2} className="text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
     </Link>
   )
 }
 
-// ── New Meeting Modal ─────────────────────────────────────────────────────────
-
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function MeetingsListPage({ params }: PageProps) {
   const { slug } = use(params)
   const projectName = slugToTitle(slug)
   const router = useRouter()
+
   const [showModal, setShowModal] = useState(false)
   const [meetings, setMeetings] = useState<MeetingRecord[]>([])
-  const [activeTab, setActiveTab] = useState(0)
+  const [activeTab, setActiveTab] = useState<"all" | "tasks" | "decisions" | "risks">("all")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [projectFolderId, setProjectFolderId] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
   const { token, isAuthenticated } = useAuth()
 
-  // Load meetings from Excel database
   const loadMeetingsFromDB = async () => {
     if (!token || !isAuthenticated) return
-    
+    setLoading(true)
+    setError(null)
     try {
-      setLoading(true)
-      setError(null)
-
-      // Demo mode: use static data
       if (token === DEMO_TOKEN) {
         const folder = getDemoProjectBySlug(slug)
         if (folder) {
           setProjectFolderId(folder.id)
           const demoMtgs = DEMO_MEETINGS[folder.id] ?? []
-          const records: MeetingRecord[] = demoMtgs.map((m) => ({
-            id: m.id,
-            title: m.title,
-            date: m.date,
+          setMeetings(demoMtgs.map((m) => ({
+            id: m.id, title: m.title, date: m.date,
             displayDate: formatDateDisplay(m.date),
-            organizer: m.organizer,
-            participants: m.participants,
-            taskCount: m.taskCount,
-            decisionCount: m.decisionCount,
-            riskCount: m.riskCount,
-          }))
-          setMeetings(records)
+            organizer: m.organizer, participants: m.participants,
+            taskCount: m.taskCount, decisionCount: m.decisionCount, riskCount: m.riskCount,
+          })))
         } else {
-          setMeetings([])
+          setMeetings(MOCK_MEETINGS)
         }
-        setLoading(false)
         return
       }
-      
-      // Get the project folder ID by matching slug to projects
       const customersWithProjects = await fetchAllCustomersWithProjects(token)
-      let folderIdFromProjects: string | null = null
-      
+      let folderId: string | null = null
       for (const { projects } of customersWithProjects) {
-        const project = projects.find((p) => {
-          const projectSlug = p.name.toLowerCase().replace(/\s+/g, "-")
-          return projectSlug === slug
-        })
-        if (project) {
-          folderIdFromProjects = project.id
-          setProjectFolderId(project.id)
-          break
-        }
+        const p = projects.find((p) => p.name.toLowerCase().replace(/\s+/g, "-") === slug)
+        if (p) { folderId = p.id; setProjectFolderId(p.id); break }
       }
-      
-      if (!folderIdFromProjects) {
-        setMeetings([])
-        setLoading(false)
-        return
-      }
-      
-      // Fetch meeting data from Excel
-      const db = await fetchMeetingDatabase(token, folderIdFromProjects)
-      
-      // Transform Excel data into MeetingRecords
-      const records: MeetingRecord[] = db.meetings.map((m) => {
-        const attendeeCount = db.attendees.filter((a) => a.Meeting_ID === m.Meeting_ID).length
-        const taskCount = db.actions.filter((a) => a.Meeting_ID === m.Meeting_ID).length
-        const decisionCount = db.decisions.filter((d) => d.Meeting_ID === m.Meeting_ID).length
-        const riskCount = db.risks.filter((r) => r.Meeting_ID === m.Meeting_ID).length
-        
-        // Format date using the formatDateDisplay function
-        const displayDate = formatDateDisplay(m.Meeting_date)
-        
-        return {
-          id: m.Meeting_ID,
-          title: m.Meeting_title,
-          date: m.Meeting_date,
-          displayDate,
-          organizer: m.Organizer,
-          participants: attendeeCount,
-          taskCount,
-          decisionCount,
-          riskCount,
-        }
-      })
-      
-      setMeetings(records)
+      if (!folderId) { setMeetings([]); return }
+      const db = await fetchMeetingDatabase(token, folderId)
+      setMeetings(db.meetings.map((m) => ({
+        id: m.Meeting_ID,
+        title: m.Meeting_title,
+        date: m.Meeting_date,
+        displayDate: formatDateDisplay(m.Meeting_date),
+        organizer: m.Organizer,
+        participants: db.attendees.filter((a) => a.Meeting_ID === m.Meeting_ID).length,
+        taskCount: db.actions.filter((a) => a.Meeting_ID === m.Meeting_ID).length,
+        decisionCount: db.decisions.filter((d) => d.Meeting_ID === m.Meeting_ID).length,
+        riskCount: db.risks.filter((r) => r.Meeting_ID === m.Meeting_ID).length,
+      })))
     } catch (err) {
-      console.error("[v0] Failed to load meetings:", err)
       setError(err instanceof Error ? err.message : "Failed to load meetings")
-      setMeetings([])
+      setMeetings(MOCK_MEETINGS)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleMeetingCreated = async (webhookResponse: any) => {
-    // Reload meetings after processing
-    await loadMeetingsFromDB()
-    console.log("[v0] Meeting created with webhook response:", webhookResponse)
-  }
-
-  useEffect(() => {
-    if (!isAuthenticated) router.replace("/")
-  }, [isAuthenticated, router])
-
-  useEffect(() => {
-    loadMeetingsFromDB()
-  }, [slug, token, isAuthenticated])
+  useEffect(() => { if (!isAuthenticated) router.replace("/") }, [isAuthenticated, router])
+  useEffect(() => { loadMeetingsFromDB() }, [slug, token, isAuthenticated])
 
   if (!isAuthenticated) return null
 
-  const tabs = ["Meetings", "Generated Tasks", "Decisions", "Notes"]
+  const totalTasks     = meetings.reduce((s, m) => s + m.taskCount, 0)
+  const totalDecisions = meetings.reduce((s, m) => s + m.decisionCount, 0)
+  const totalRisks     = meetings.reduce((s, m) => s + m.riskCount, 0)
+
+  const filtered = meetings.filter((m) => {
+    const q = search.toLowerCase()
+    const matchesSearch = !q || m.title.toLowerCase().includes(q) || m.organizer?.toLowerCase().includes(q)
+    if (!matchesSearch) return false
+    if (activeTab === "tasks")     return m.taskCount > 0
+    if (activeTab === "decisions") return m.decisionCount > 0
+    if (activeTab === "risks")     return m.riskCount > 0
+    return true
+  })
+
+  const TABS = [
+    { id: "all",       label: "All Meetings", count: meetings.length },
+    { id: "tasks",     label: "Has Tasks",    count: meetings.filter((m) => m.taskCount > 0).length },
+    { id: "decisions", label: "Decisions",    count: meetings.filter((m) => m.decisionCount > 0).length },
+    { id: "risks",     label: "Risks",        count: meetings.filter((m) => m.riskCount > 0).length },
+  ] as const
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
 
-      {/* Page header */}
-      <div className="bg-card border-b border-border px-8 pt-6 pb-0 shrink-0">
-        <div className="flex items-center justify-between gap-4 mb-5">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground font-sans mb-1">{projectName}</p>
-            <h1 className="text-2xl font-black text-foreground font-sans tracking-tight">Meetings</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Search */}
-            <div className="flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-background text-xs font-sans text-muted-foreground">
-              <Search size={12} strokeWidth={2} />
-              <input className="bg-transparent outline-none w-40 placeholder:text-muted-foreground text-foreground" placeholder="Search meetings..." />
-            </div>
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-sans font-semibold text-primary-foreground transition-all hover:opacity-90 hover:shadow-md"
-              style={{ background: "var(--primary)" }}
-            >
-              <Plus size={14} strokeWidth={2.5} />
-              New Meeting
-            </button>
-          </div>
+      {/* ── Page header ── */}
+      <div className="flex items-center justify-between gap-3 px-6 py-3.5 border-b border-border bg-card shrink-0">
+        <div className="flex items-center gap-2 text-[11px] font-sans text-muted-foreground">
+          <Link href="/projects" className="hover:text-primary transition-colors font-medium">Projects</Link>
+          <ChevronRight size={11} strokeWidth={2.5} />
+          <Link href={`/projects/${slug}`} className="hover:text-primary transition-colors font-medium">{projectName}</Link>
+          <ChevronRight size={11} strokeWidth={2.5} />
+          <span className="text-foreground font-semibold">Meetings</span>
         </div>
-
-        {/* Sub-nav tabs */}
-        <div className="flex items-center gap-0">
-          {tabs.map((tab, i) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(i)}
-              className="relative px-4 py-3 text-sm font-sans font-medium transition-colors"
-              style={{ color: activeTab === i ? "var(--primary)" : "var(--muted-foreground)" }}
-            >
-              {tab}
-              {activeTab === i && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t" style={{ background: "var(--primary)" }} />
-              )}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="flex items-center gap-2 h-8 px-3 rounded-lg border border-border bg-background text-[11px] font-sans text-muted-foreground">
+            <Search size={11} strokeWidth={2} />
+            <input
+              className="bg-transparent outline-none w-36 placeholder:text-muted-foreground text-foreground"
+              placeholder="Search meetings..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          {/* Tab switcher */}
+          <div className="flex items-center rounded-lg border border-border overflow-hidden">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className="flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 transition-all"
+                style={{
+                  background: activeTab === tab.id ? "var(--primary)" : "transparent",
+                  color: activeTab === tab.id ? "white" : "var(--muted-foreground)",
+                }}
+              >
+                {tab.label}
+                <span className="text-[9px] opacity-70">({tab.count})</span>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-90 hover:shadow-md"
+            style={{ background: "var(--primary)" }}
+          >
+            <Plus size={12} strokeWidth={2.5} />
+            New Meeting
+          </button>
         </div>
       </div>
 
-      {/* Meetings list */}
-      <div className="flex-1 overflow-y-auto bg-background">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-24">
-            <Loader2 size={40} strokeWidth={1.5} className="text-muted-foreground animate-spin" />
-            <p className="text-sm font-sans text-muted-foreground">Loading meetings...</p>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-24">
-            <p className="text-sm font-sans text-red-500">{error}</p>
-          </div>
-        ) : meetings.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-24">
-            <CalendarDays size={40} strokeWidth={1} className="text-muted-foreground" />
-            <p className="text-sm font-sans text-muted-foreground text-center max-w-xs">No data available</p>
-          </div>
-        ) : (
-          <div>
-            {meetings.map((meeting) => (
-              <MeetingRow key={meeting.id} meeting={meeting} projectSlug={slug} />
+      {/* ── Body ── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 flex flex-col gap-6 max-w-5xl mx-auto">
+
+          {/* Stats row */}
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { label: "Total Meetings", value: meetings.length,   icon: CalendarDays, color: "oklch(0.58 0.30 293)" },
+              { label: "Open Tasks",     value: totalTasks,         icon: CheckSquare,  color: "oklch(0.55 0.22 150)" },
+              { label: "Decisions Made", value: totalDecisions,     icon: TrendingUp,   color: "oklch(0.56 0.25 240)" },
+              { label: "Risks Raised",   value: totalRisks,         icon: AlertTriangle,color: "oklch(0.62 0.24 15)"  },
+            ].map((s) => (
+              <div key={s.label}
+                className="rounded-xl border bg-card p-4 flex items-center gap-3"
+                style={{ borderColor: `color-mix(in oklch, ${s.color} 20%, transparent)` }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ background: `color-mix(in oklch, ${s.color} 12%, white)` }}>
+                  <s.icon size={15} style={{ color: s.color }} strokeWidth={2} />
+                </div>
+                <div>
+                  <p className="text-xl font-black text-foreground leading-none">{loading ? "—" : s.value}</p>
+                  <p className="text-[10px] text-muted-foreground font-sans mt-0.5">{s.label}</p>
+                </div>
+              </div>
             ))}
           </div>
-        )}
+
+          {/* AI insights banner */}
+          <div className="rounded-2xl border overflow-hidden relative"
+            style={{
+              background: "color-mix(in oklch, oklch(0.63 0.20 195) 5%, white)",
+              borderColor: "color-mix(in oklch, oklch(0.63 0.20 195) 22%, transparent)",
+            }}>
+            <div className="absolute top-0 right-0 w-28 h-28 -translate-y-8 translate-x-8 rounded-full opacity-20"
+              style={{ background: "oklch(0.63 0.20 195)" }} />
+            <div className="p-5 relative flex items-center gap-4">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "oklch(0.63 0.20 195)" }}>
+                <Sparkles size={16} color="white" strokeWidth={2} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-black text-foreground tracking-tight">Meeting Intelligence</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
+                  {meetings.length > 0
+                    ? `Across ${meetings.length} meetings — ${totalTasks} tasks tracked, ${totalDecisions} decisions logged, ${totalRisks} risks identified.`
+                    : "No meetings yet. Upload a transcript to extract tasks, decisions, and risks automatically."}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold text-white shrink-0 transition-all hover:opacity-90"
+                style={{ background: "oklch(0.63 0.20 195)" }}>
+                <Plus size={12} strokeWidth={2.5} />
+                Add Meeting
+              </button>
+            </div>
+          </div>
+
+          {/* Section label */}
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
+              {activeTab === "all" ? "All Meetings" : TABS.find((t) => t.id === activeTab)?.label}
+              {" "}
+              <span className="font-black" style={{ color: "var(--primary)" }}>({filtered.length})</span>
+            </p>
+            <button className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors">
+              <Filter size={10} strokeWidth={2} />
+              Sort
+            </button>
+          </div>
+
+          {/* Meeting cards grid */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-20">
+              <Loader2 size={36} strokeWidth={1.5} className="text-muted-foreground animate-spin" />
+              <p className="text-sm font-sans text-muted-foreground">Loading meetings...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-20">
+              <AlertTriangle size={32} className="text-red-400" strokeWidth={1.5} />
+              <p className="text-sm font-sans text-red-500">{error}</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-20">
+              <CalendarDays size={36} strokeWidth={1} className="text-muted-foreground/40" />
+              <p className="text-sm font-sans text-muted-foreground">No meetings match this filter</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {filtered.map((meeting) => (
+                <MeetingCard key={meeting.id} meeting={meeting} projectSlug={slug} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* New Meeting Modal */}
-      {showModal && projectFolderId && (
+      {showModal && (
         <NewMeetingModal
           projectSlug={slug}
-          projectFolderId={projectFolderId}
+          projectFolderId={projectFolderId ?? ""}
           onClose={() => setShowModal(false)}
-          onCreated={handleMeetingCreated}
+          onCreated={async () => { await loadMeetingsFromDB(); setShowModal(false) }}
         />
       )}
     </div>
