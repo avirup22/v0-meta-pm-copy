@@ -140,7 +140,7 @@ export default function Planner2Page({ params }: PageProps) {
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const q = search.toLowerCase()
-      const matchSearch = !q || [r.Activity, r["Owner(s)"], r.Stream, r.WAVE, r.Sprint, r.Note]
+      const matchSearch = !q || [r.Activity, r["Owner(s),"], r.Stream, r.WAVE, r.Sprint, r.Note]
         .some((v) => v?.toLowerCase().includes(q))
       const matchSprint = sprintFilter === "All" || r.Sprint === sprintFilter
       const matchStatus = statusFilter === "All" || r.Status === statusFilter
@@ -174,7 +174,7 @@ export default function Planner2Page({ params }: PageProps) {
       render: (v) => <span className="text-xs font-semibold text-foreground font-sans leading-tight block">{v || "—"}</span> },
     { key: "Stream",                       label: "Stream",          width: "min-w-[100px]" },
     { key: "Integration / Input Source",   label: "Integration",     width: "min-w-[120px] max-w-[160px]" },
-    { key: "Owner(s)",                     label: "Owner(s)",        width: "min-w-[110px]",
+    { key: "Owner(s),",                    label: "Owner(s)",        width: "min-w-[110px]",
       render: (v) => v ? (
         <div className="flex flex-wrap gap-1">
           {v.split(/[,;/]/).map((o) => o.trim()).filter(Boolean).map((name) => (

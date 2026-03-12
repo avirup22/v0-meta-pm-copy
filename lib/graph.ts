@@ -1089,7 +1089,7 @@ export interface SprintTrackerRow {
   Activity: string
   Stream: string
   "Integration / Input Source": string
-  "Owner(s)": string
+  "Owner(s),": string   // exact Excel header — trailing comma is part of the column name
   "Duration (Days)": string
   "Start Date": string
   "End Date": string
