@@ -1079,6 +1079,72 @@ export async function createPlannerTask(
   return res.json()
 }
 
+// ─── Sprint Plan Tracker ──────────────────────────────────────────────────────
+
+export interface SprintTrackerRow {
+  Sprint: string
+  "Task#": string
+  WAVE: string
+  Geography: string
+  Activity: string
+  Stream: string
+  "Integration / Input Source": string
+  "Owner(s)": string
+  "Duration (Days)": string
+  "Start Date": string
+  "End Date": string
+  Status: string
+  Stage: string
+  Note: string
+  [key: string]: string
+}
+
+/**
+ * Locate the Sprint_Plan_and_Status_Tracker.xlsx under
+ * MetaPM / <customerFolder> / <projectFolder> / Reference Documents
+ * then read the Timeline_Sprint_Tracker worksheet table.
+ */
+export async function fetchSprintPlanTracker(
+  token: string,
+  projectFolderId: string
+): Promise<SprintTrackerRow[]> {
+  // Step 1: get the project folder item to find its parent (customer) and its own children
+  const projectRes = await fetch(`${GRAPH_BASE}/me/drive/items/${projectFolderId}?$select=id,name,parentReference`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!projectRes.ok) throw new Error(`Could not read project folder: HTTP ${projectRes.status}`)
+
+  // Step 2: list children of project folder to find "Reference Documents"
+  const childrenRes = await fetch(
+    `${GRAPH_BASE}/me/drive/items/${projectFolderId}/children?$select=id,name,folder,file&$top=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!childrenRes.ok) throw new Error(`Could not list project folder children: HTTP ${childrenRes.status}`)
+  const childrenData: { value: DriveItem[] } = await childrenRes.json()
+
+  const refDocFolder = childrenData.value.find(
+    (item) => item.folder && /Reference\s*Documents/i.test(item.name)
+  )
+  if (!refDocFolder) throw new Error('Folder "Reference Documents" not found inside the project folder.')
+
+  // Step 3: list children of Reference Documents to find Sprint_Plan_and_Status_Tracker.xlsx
+  const refRes = await fetch(
+    `${GRAPH_BASE}/me/drive/items/${refDocFolder.id}/children?$select=id,name,file&$top=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!refRes.ok) throw new Error(`Could not list Reference Documents: HTTP ${refRes.status}`)
+  const refData: { value: DriveItem[] } = await refRes.json()
+
+  const trackerFile = refData.value.find(
+    (item) => item.file && /Sprint_Plan_and_Status_Tracker/i.test(item.name)
+  )
+  if (!trackerFile) throw new Error('"Sprint_Plan_and_Status_Tracker.xlsx" not found in Reference Documents.')
+
+  // Step 4: read the Timeline_Sprint_Tracker worksheet
+  const rows = await readWorksheet<SprintTrackerRow>(token, trackerFile.id, "Timeline_Sprint_Tracker")
+  return rows
+}
+
 /**
  * Download a Drive item as an ArrayBuffer (for binary files like PPTX).
  */
