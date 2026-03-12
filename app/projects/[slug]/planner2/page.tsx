@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState, useEffect, useMemo } from "react"
+import React, { use, useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -856,9 +856,9 @@ export default function Planner2Page({ params }: PageProps) {
                       // Find the real index in rows[] for this filtered row (needed for Excel update)
                       const realIndex = rows.indexOf(row)
                       return (
-                        <>
+                        <React.Fragment key={`row-${i}`}>
                           {/* Hover-to-insert separator above row */}
-                          <tr key={`insert-${i}`} className="insert-row h-0 group/ins"
+                          <tr className="insert-row h-0 group/ins"
                             style={{ height: 0 }}
                             onMouseEnter={() => setHoveredInsert(i)}
                             onMouseLeave={() => setHoveredInsert(null)}>
@@ -879,7 +879,7 @@ export default function Planner2Page({ params }: PageProps) {
                           </tr>
 
                           {/* Data row */}
-                          <tr key={i}
+                          <tr
                             className="border-b border-border transition-colors hover:bg-secondary/40 group"
                             style={attention
                               ? { background: "color-mix(in oklch, oklch(0.60 0.26 25) 4%, white)" }
@@ -905,7 +905,7 @@ export default function Planner2Page({ params }: PageProps) {
                               </td>
                             ))}
                           </tr>
-                        </>
+                        </React.Fragment>
                       )
                     })}
 
