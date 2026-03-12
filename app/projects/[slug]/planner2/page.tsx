@@ -910,7 +910,7 @@ export default function Planner2Page({ params }: PageProps) {
                     })}
 
                     {/* Insert after last row */}
-                    <tr className="insert-row h-0 group/ins"
+                    <tr key="insert-last" className="insert-row h-0 group/ins"
                       onMouseEnter={() => setHoveredInsert(filtered.length)}
                       onMouseLeave={() => setHoveredInsert(null)}>
                       <td colSpan={COLS.length + 1} className="p-0 relative" style={{ height: 0 }}>
