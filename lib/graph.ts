@@ -1100,14 +1100,58 @@ export interface SprintTrackerRow {
 }
 
 /**
+ * Append a new row to the Timeline_Sprint_Tracker table in the xlsx.
+ * values must be in the same column order as the table headers.
+ */
+export async function appendSprintTrackerRow(
+  token: string,
+  fileId: string,
+  values: (string | number | null)[]
+): Promise<void> {
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/tables/Timeline_Sprint_Tracker/rows`
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ values: [values] }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+}
+
+/**
+ * Update an existing row in the Timeline_Sprint_Tracker table by its 0-based index.
+ * values must be in the same column order as the table headers.
+ */
+export async function updateSprintTrackerRow(
+  token: string,
+  fileId: string,
+  rowIndex: number,
+  values: (string | number | null)[]
+): Promise<void> {
+  const url = `${GRAPH_BASE}/me/drive/items/${fileId}/workbook/tables/Timeline_Sprint_Tracker/rows/itemAt(index=${rowIndex})`
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ values: [values] }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `HTTP ${res.status}`)
+  }
+}
+
+/**
  * Locate the Sprint_Plan_and_Status_Tracker.xlsx under
  * MetaPM / <customerFolder> / <projectFolder> / Reference Documents
  * then read the Timeline_Sprint_Tracker worksheet table.
+ * Returns both the rows and the file's drive item ID (needed for writes).
  */
 export async function fetchSprintPlanTracker(
   token: string,
   projectFolderId: string
-): Promise<SprintTrackerRow[]> {
+): Promise<{ rows: SprintTrackerRow[]; fileId: string }> {
   // Step 1: get the project folder item to find its parent (customer) and its own children
   const projectRes = await fetch(`${GRAPH_BASE}/me/drive/items/${projectFolderId}?$select=id,name,parentReference`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -1142,7 +1186,7 @@ export async function fetchSprintPlanTracker(
 
   // Step 4: read the Timeline_Sprint_Tracker worksheet
   const rows = await readWorksheet<SprintTrackerRow>(token, trackerFile.id, "Timeline_Sprint_Tracker")
-  return rows
+  return { rows, fileId: trackerFile.id }
 }
 
 /**
