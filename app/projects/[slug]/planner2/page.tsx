@@ -41,6 +41,39 @@ function slugToTitle(slug: string) {
   return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
 }
 
+/**
+ * Convert an Excel date serial number (e.g. 45950) to dd-mm-yy.
+ * Excel epoch: 1 Jan 1900 = serial 1 (with the Lotus 1-2-3 leap-year bug
+ * meaning serial 60 was incorrectly assigned to 29 Feb 1900, so we offset
+ * by subtracting that phantom day for serials >= 60).
+ * If the value is already a recognisable date string, pass it through as-is.
+ */
+function excelDateToDisplay(value: string): string {
+  if (!value) return ""
+  const num = Number(value)
+  if (isNaN(num)) {
+    // Already a string date — try to parse and reformat
+    const d = new Date(value)
+    if (!isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, "0")
+      const mm = String(d.getMonth() + 1).padStart(2, "0")
+      const yy = String(d.getFullYear()).slice(-2)
+      return `${dd}-${mm}-${yy}`
+    }
+    return value
+  }
+  // Excel serial → JS Date
+  // Excel counts from 1 Jan 1900 as day 1, but treats 1900 as a leap year (bug).
+  // Adjust: subtract 1 for the epoch offset, subtract 1 more for serials >= 60.
+  const adjusted = num >= 60 ? num - 2 : num - 1
+  const ms = adjusted * 86400000
+  const d = new Date(Date.UTC(1900, 0, 1) + ms)
+  const dd = String(d.getUTCDate()).padStart(2, "0")
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0")
+  const yy = String(d.getUTCFullYear()).slice(-2)
+  return `${dd}-${mm}-${yy}`
+}
+
 // ─── Status helpers ────────────────────────────────────────────────────────────
 
 function statusStyle(status: string): { bg: string; color: string } {
@@ -189,17 +222,17 @@ export default function Planner2Page({ params }: PageProps) {
     { key: "Duration (Days)",              label: "Days",            width: "min-w-[55px]",
       render: (v) => v ? <span className="text-[11px] font-bold text-foreground font-mono">{v}</span> : <span className="text-muted-foreground text-[10px]">—</span> },
     { key: "Start Date",                   label: "Start",           width: "min-w-[90px]",
-      render: (v) => v ? (
+      render: (v) => { const d = excelDateToDisplay(v); return d ? (
         <span className="text-[10px] font-sans text-muted-foreground whitespace-nowrap flex items-center gap-1">
-          <CalendarClock size={9} strokeWidth={2} />{v}
+          <CalendarClock size={9} strokeWidth={2} />{d}
         </span>
-      ) : <span className="text-muted-foreground text-[10px]">—</span> },
+      ) : <span className="text-muted-foreground text-[10px]">—</span> } },
     { key: "End Date",                     label: "End",             width: "min-w-[90px]",
-      render: (v) => v ? (
+      render: (v) => { const d = excelDateToDisplay(v); return d ? (
         <span className="text-[10px] font-sans text-muted-foreground whitespace-nowrap flex items-center gap-1">
-          <CalendarClock size={9} strokeWidth={2} />{v}
+          <CalendarClock size={9} strokeWidth={2} />{d}
         </span>
-      ) : <span className="text-muted-foreground text-[10px]">—</span> },
+      ) : <span className="text-muted-foreground text-[10px]">—</span> } },
     { key: "Status",                       label: "Status",          width: "min-w-[110px]", render: (v) => <StatusPill status={v} /> },
     { key: "Stage",                        label: "Stage",           width: "min-w-[90px]" },
     { key: "Note",                         label: "Note",            width: "min-w-[140px] max-w-[200px]",
