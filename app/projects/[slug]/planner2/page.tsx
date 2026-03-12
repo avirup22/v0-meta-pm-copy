@@ -347,21 +347,22 @@ function RowForm({ draft, onChange }: { draft: RowDraft; onChange: (k: string, v
   )
 }
 
-function draftToValues(draft: RowDraft): (string | number | null)[] {
-  return TABLE_COLS.map((col) => {
-    const val = draft[col]
+function draftToValues(draft: RowDraft, liveCols?: string[]): (string | number | null)[] {
+  // Use live column order from the Excel table to guarantee count matches
+  const cols = (liveCols && liveCols.length > 0 ? liveCols : TABLE_COLS) as string[]
+  return cols.map((col) => {
+    const val = (draft as Record<string, string>)[col] ?? ""
     if (DATE_COLS.has(col) && val) {
       return dateInputToExcelSerial(val)
     }
-    const num = Number(val)
-    if (val !== "" && !isNaN(num) && col === "Duration (Days)") return num
+    if (col === "Duration (Days)" && val !== "" && !isNaN(Number(val))) return Number(val)
     return val || null
   })
 }
 
 // ─── Add Row Modal ─────────────────────────────────────────────────────────────
-function AddRowModal({ token, fileId, insertAfterIndex, onClose, onCreated }: {
-  token: string; fileId: string; insertAfterIndex: number; onClose: () => void; onCreated: () => void
+function AddRowModal({ token, fileId, insertAfterIndex, tableColumns, onClose, onCreated }: {
+  token: string; fileId: string; insertAfterIndex: number; tableColumns: string[]; onClose: () => void; onCreated: () => void
 }) {
   const [draft,   setDraft]   = useState<RowDraft>({ ...EMPTY_DRAFT })
   const [saving,  setSaving]  = useState(false)
@@ -374,7 +375,7 @@ function AddRowModal({ token, fileId, insertAfterIndex, onClose, onCreated }: {
     if (!draft.Activity.trim()) return
     setSaving(true); setError(null)
     try {
-      await appendSprintTrackerRow(token, fileId, draftToValues(draft))
+      await appendSprintTrackerRow(token, fileId, draftToValues(draft, tableColumns))
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add row")
@@ -426,8 +427,8 @@ function AddRowModal({ token, fileId, insertAfterIndex, onClose, onCreated }: {
 }
 
 // ─── Edit Row Modal ────────────────────────────────────────────────────────────
-function EditRowModal({ token, fileId, rowIndex, initial, onClose, onSaved }: {
-  token: string; fileId: string; rowIndex: number; initial: SprintTrackerRow; onClose: () => void; onSaved: () => void
+function EditRowModal({ token, fileId, rowIndex, initial, tableColumns, onClose, onSaved }: {
+  token: string; fileId: string; rowIndex: number; initial: SprintTrackerRow; tableColumns: string[]; onClose: () => void; onSaved: () => void
 }) {
   const initDraft: RowDraft = {} as RowDraft
   TABLE_COLS.forEach((col) => {
@@ -444,7 +445,7 @@ function EditRowModal({ token, fileId, rowIndex, initial, onClose, onSaved }: {
     e.preventDefault()
     setSaving(true); setError(null)
     try {
-      await updateSprintTrackerRow(token, fileId, rowIndex, draftToValues(draft))
+      await updateSprintTrackerRow(token, fileId, rowIndex, draftToValues(draft, tableColumns))
       onSaved()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update row")
@@ -502,6 +503,7 @@ export default function Planner2Page({ params }: PageProps) {
 
   const [rows,           setRows]           = useState<SprintTrackerRow[]>([])
   const [trackerFileId,  setTrackerFileId]  = useState<string | null>(null)
+  const [tableColumns,   setTableColumns]   = useState<string[]>(TABLE_COLS as unknown as string[])
   const [loading,        setLoading]        = useState(false)
   const [error,          setError]          = useState<string | null>(null)
   const [projectTitle,   setProjectTitle]   = useState(slugToTitle(slug))
@@ -526,9 +528,10 @@ export default function Planner2Page({ params }: PageProps) {
         if (match) { folderId = match.id; setProjectTitle(match.name); break }
       }
       if (!folderId) { setError(`Project folder not found for "${slug}".`); setLoading(false); return }
-      const { rows: data, fileId } = await fetchSprintPlanTracker(token, folderId)
+      const { rows: data, fileId, tableColumns: liveCols } = await fetchSprintPlanTracker(token, folderId)
       setRows(data)
       setTrackerFileId(fileId)
+      if (liveCols.length > 0) setTableColumns(liveCols)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load sprint tracker")
     } finally {
@@ -940,6 +943,7 @@ export default function Planner2Page({ params }: PageProps) {
       {addAfterIndex !== null && trackerFileId && (
         <AddRowModal
           token={token!} fileId={trackerFileId} insertAfterIndex={addAfterIndex}
+          tableColumns={tableColumns}
           onClose={() => setAddAfterIndex(null)}
           onCreated={() => { setAddAfterIndex(null); load() }}
         />
@@ -947,6 +951,7 @@ export default function Planner2Page({ params }: PageProps) {
       {editTarget && trackerFileId && (
         <EditRowModal
           token={token!} fileId={trackerFileId} rowIndex={editTarget.rowIndex} initial={editTarget.row}
+          tableColumns={tableColumns}
           onClose={() => setEditTarget(null)}
           onSaved={() => { setEditTarget(null); load() }}
         />

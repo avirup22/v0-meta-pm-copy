@@ -1151,7 +1151,7 @@ export async function updateSprintTrackerRow(
 export async function fetchSprintPlanTracker(
   token: string,
   projectFolderId: string
-): Promise<{ rows: SprintTrackerRow[]; fileId: string }> {
+): Promise<{ rows: SprintTrackerRow[]; fileId: string; tableColumns: string[] }> {
   // Step 1: get the project folder item to find its parent (customer) and its own children
   const projectRes = await fetch(`${GRAPH_BASE}/me/drive/items/${projectFolderId}?$select=id,name,parentReference`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -1184,9 +1184,21 @@ export async function fetchSprintPlanTracker(
   )
   if (!trackerFile) throw new Error('"Sprint_Plan_and_Status_Tracker.xlsx" not found in Reference Documents.')
 
-  // Step 4: read the Timeline_Sprint_Tracker worksheet
+  // Step 4: get live table column headers (drives the exact column count for writes)
+  const colsRes = await fetch(
+    `${GRAPH_BASE}/me/drive/items/${trackerFile.id}/workbook/tables/Timeline_Sprint_Tracker/columns?$select=name&$top=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  let tableColumns: string[] = []
+  if (colsRes.ok) {
+    const colsData: { value: { name: string }[] } = await colsRes.json()
+    tableColumns = colsData.value.map((c) => c.name)
+    console.log("[v0] fetchSprintPlanTracker: table columns =", tableColumns)
+  }
+
+  // Step 5: read the Timeline_Sprint_Tracker worksheet rows
   const rows = await readWorksheet<SprintTrackerRow>(token, trackerFile.id, "Timeline_Sprint_Tracker")
-  return { rows, fileId: trackerFile.id }
+  return { rows, fileId: trackerFile.id, tableColumns }
 }
 
 /**
