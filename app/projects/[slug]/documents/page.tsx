@@ -543,32 +543,23 @@ export default function DocumentsPage({ params }: PageProps) {
             </div>
           </div>
         )}
-      </div>
-
-      {/* RACI Modal */}
-      {showRACIModal && <RACIModal onClose={() => setShowRACIModal(false)} />}
-    </div>
-  )
-}
-
 // ─── RACI Modal Component ──────────────────────────────────────────────────────
 
-interface RACIRow {
-  Activity: string
-  Responsible: string
-  Accountable: string
-  Consulted: string
-  Informed: string
+interface RACIMatrixRow {
+  task: string
+  responsibility: string
+  [stakeholder: string]: string
 }
 
 function RACIModal({ onClose }: { onClose: () => void }) {
   const [sowText, setSowText] = useState("")
-  const [raciRows, setRACIRows] = useState<RACIRow[]>([])
+  const [raciRows, setRACIRows] = useState<RACIMatrixRow[]>([])
+  const [stakeholders, setStakeholders] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [step, setStep] = useState<"input" | "view">("input")
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const [editDraft, setEditDraft] = useState<RACIRow | null>(null)
+  const [editDraft, setEditDraft] = useState<RACIMatrixRow | null>(null)
 
   async function handleGenerate() {
     if (!sowText.trim()) {
@@ -579,7 +570,15 @@ function RACIModal({ onClose }: { onClose: () => void }) {
     setError(null)
     try {
       const result = await generateRACIFromSOW(sowText)
-      setRACIRows(result.rows)
+      const rows = result.output.raci_matrix
+      
+      // Extract dynamic stakeholder column names (all keys except 'task' and 'responsibility')
+      const stakeholderCols = rows.length > 0 
+        ? Object.keys(rows[0]).filter(k => k !== 'task' && k !== 'responsibility')
+        : []
+      
+      setRACIRows(rows)
+      setStakeholders(stakeholderCols)
       setStep("view")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate RACI")
@@ -604,7 +603,8 @@ function RACIModal({ onClose }: { onClose: () => void }) {
   }
 
   function addRow() {
-    const newRow: RACIRow = { Activity: "", Responsible: "", Accountable: "", Consulted: "", Informed: "" }
+    const newRow: RACIMatrixRow = { task: "", responsibility: "" }
+    stakeholders.forEach(s => { newRow[s] = "" })
     setRACIRows([...raciRows, newRow])
   }
 
@@ -613,6 +613,20 @@ function RACIModal({ onClose }: { onClose: () => void }) {
   }
 
   const RACI_COLOR = "oklch(0.65 0.20 55)"
+  const raciColors: Record<string, string> = {
+    "R": "oklch(0.55 0.26 25)",
+    "A": "oklch(0.60 0.20 25)",
+    "C": "oklch(0.65 0.20 55)",
+    "I": "oklch(0.55 0.20 240)",
+  }
+
+  // Group rows by task
+  const groupedByTask = raciRows.reduce((acc, row, idx) => {
+    const task = row.task || "Ungrouped"
+    if (!acc[task]) acc[task] = []
+    acc[task].push({ ...row, _index: idx })
+    return acc
+  }, {} as Record<string, (RACIMatrixRow & { _index: number })[]>)
 
   return (
     <div
@@ -620,7 +634,7 @@ function RACIModal({ onClose }: { onClose: () => void }) {
       style={{ background: "rgba(0,0,0,0.45)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-5xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col overflow-hidden"
+      <div className="w-full max-w-6xl rounded-2xl border border-border bg-card shadow-2xl flex flex-col overflow-hidden"
         style={{ maxHeight: "90vh" }}>
 
         {/* Header */}
@@ -684,7 +698,7 @@ function RACIModal({ onClose }: { onClose: () => void }) {
           ) : (
             <>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-foreground font-sans">RACI Matrix ({raciRows?.length || 0} activities)</h3>
+                <h3 className="text-sm font-bold text-foreground font-sans">RACI Matrix ({raciRows?.length || 0} items)</h3>
                 <button onClick={addRow}
                   className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-90"
                   style={{ background: RACI_COLOR }}>
@@ -693,63 +707,90 @@ function RACIModal({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
 
+              {/* Legend */}
+              <div className="flex items-center gap-3 text-[10px] font-sans p-3 rounded-lg border border-border"
+                style={{ background: "var(--muted-foreground/5)" }}>
+                <div className="font-bold text-foreground">Legend:</div>
+                {Object.entries(raciColors).map(([letter, color]) => (
+                  <div key={letter} className="flex items-center gap-1.5">
+                    <div className="w-4 h-4 rounded" style={{ background: color }}></div>
+                    <span className="font-mono font-bold text-foreground">{letter}</span>
+                    <span className="text-muted-foreground">
+                      {letter === "R" ? "Responsible" : letter === "A" ? "Accountable" : letter === "C" ? "Consulted" : "Informed"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
               {/* Table */}
               <div className="overflow-x-auto rounded-lg border border-border bg-white">
                 <table className="w-full text-xs font-sans border-collapse">
                   <thead>
                     <tr style={{ background: `color-mix(in oklch, ${RACI_COLOR} 8%, white)` }}>
-                      <th className="px-4 py-2.5 text-left font-bold text-foreground border-b border-border">Activity</th>
-                      <th className="px-4 py-2.5 text-left font-bold text-foreground border-b border-border">Responsible</th>
-                      <th className="px-4 py-2.5 text-left font-bold text-foreground border-b border-border">Accountable</th>
-                      <th className="px-4 py-2.5 text-left font-bold text-foreground border-b border-border">Consulted</th>
-                      <th className="px-4 py-2.5 text-left font-bold text-foreground border-b border-border">Informed</th>
-                      <th className="px-4 py-2.5 text-center font-bold text-foreground border-b border-border">Actions</th>
+                      <th className="px-4 py-2.5 text-left font-bold text-foreground border-b border-border min-w-[120px]">Task</th>
+                      <th className="px-4 py-2.5 text-left font-bold text-foreground border-b border-border min-w-[180px]">Responsibility</th>
+                      {stakeholders.map((s) => (
+                        <th key={s} className="px-4 py-2.5 text-center font-bold text-foreground border-b border-border min-w-[100px]">
+                          {s}
+                        </th>
+                      ))}
+                      <th className="px-4 py-2.5 text-center font-bold text-foreground border-b border-border min-w-[80px]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {raciRows.map((row, i) => (
-                      <tr key={i} className="border-b border-border hover:bg-muted/30 transition-colors group">
-                        {editingIndex === i ? (
-                          <>
-                            <td className="px-4 py-2 border-r border-border">
-                              <input type="text" value={editDraft?.Activity || ""} onChange={(e) => setEditDraft({...editDraft!, Activity: e.target.value})} className="w-full px-2 py-1 rounded border border-border text-[10px] focus:outline-none focus:ring-1" style={{ "--tw-ring-color": RACI_COLOR } as React.CSSProperties} />
+                    {Object.entries(groupedByTask).map(([task, rows]) =>
+                      rows.map((row, rowIdx) => (
+                        <tr key={row._index} className="border-b border-border hover:bg-muted/30 transition-colors group">
+                          {rowIdx === 0 && (
+                            <td rowSpan={rows.length} className="px-4 py-2 text-foreground font-semibold border-r border-border bg-muted/20 align-top">
+                              {editingIndex === row._index ? (
+                                <input type="text" value={editDraft?.task || ""} onChange={(e) => setEditDraft({...editDraft!, task: e.target.value})} className="w-full px-2 py-1 rounded border border-border text-[10px] focus:outline-none focus:ring-1" />
+                              ) : (
+                                task
+                              )}
                             </td>
-                            <td className="px-4 py-2 border-r border-border">
-                              <input type="text" value={editDraft?.Responsible || ""} onChange={(e) => setEditDraft({...editDraft!, Responsible: e.target.value})} className="w-full px-2 py-1 rounded border border-border text-[10px] focus:outline-none focus:ring-1" style={{ "--tw-ring-color": RACI_COLOR } as React.CSSProperties} />
-                            </td>
-                            <td className="px-4 py-2 border-r border-border">
-                              <input type="text" value={editDraft?.Accountable || ""} onChange={(e) => setEditDraft({...editDraft!, Accountable: e.target.value})} className="w-full px-2 py-1 rounded border border-border text-[10px] focus:outline-none focus:ring-1" style={{ "--tw-ring-color": RACI_COLOR } as React.CSSProperties} />
-                            </td>
-                            <td className="px-4 py-2 border-r border-border">
-                              <input type="text" value={editDraft?.Consulted || ""} onChange={(e) => setEditDraft({...editDraft!, Consulted: e.target.value})} className="w-full px-2 py-1 rounded border border-border text-[10px] focus:outline-none focus:ring-1" style={{ "--tw-ring-color": RACI_COLOR } as React.CSSProperties} />
-                            </td>
-                            <td className="px-4 py-2 border-r border-border">
-                              <input type="text" value={editDraft?.Informed || ""} onChange={(e) => setEditDraft({...editDraft!, Informed: e.target.value})} className="w-full px-2 py-1 rounded border border-border text-[10px] focus:outline-none focus:ring-1" style={{ "--tw-ring-color": RACI_COLOR } as React.CSSProperties} />
-                            </td>
-                            <td className="px-4 py-2 text-center flex items-center justify-center gap-1">
-                              <button onClick={saveEdit} className="text-[10px] font-bold px-2 py-1 rounded text-white transition-all" style={{ background: RACI_COLOR }}>Save</button>
-                              <button onClick={() => setEditingIndex(null)} className="text-[10px] font-bold px-2 py-1 rounded border border-border text-muted-foreground transition-all hover:bg-secondary">Cancel</button>
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-4 py-2 text-foreground border-r border-border max-w-xs truncate">{row.Activity}</td>
-                            <td className="px-4 py-2 text-muted-foreground border-r border-border max-w-xs truncate">{row.Responsible}</td>
-                            <td className="px-4 py-2 text-muted-foreground border-r border-border max-w-xs truncate">{row.Accountable}</td>
-                            <td className="px-4 py-2 text-muted-foreground border-r border-border max-w-xs truncate">{row.Consulted}</td>
-                            <td className="px-4 py-2 text-muted-foreground border-r border-border max-w-xs truncate">{row.Informed}</td>
-                            <td className="px-4 py-2 text-center flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => startEdit(i)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary transition-colors" title="Edit">
-                                <Pencil size={11} className="text-muted-foreground" strokeWidth={2} />
-                              </button>
-                              <button onClick={() => deleteRow(i)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-100 transition-colors" title="Delete">
+                          )}
+                          <td className="px-4 py-2 text-foreground border-r border-border">
+                            {editingIndex === row._index ? (
+                              <input type="text" value={editDraft?.responsibility || ""} onChange={(e) => setEditDraft({...editDraft!, responsibility: e.target.value})} className="w-full px-2 py-1 rounded border border-border text-[10px] focus:outline-none focus:ring-1" />
+                            ) : (
+                              row.responsibility
+                            )}
+                          </td>
+                          {stakeholders.map((s) => {
+                            const val = editingIndex === row._index ? (editDraft?.[s] || "") : (row[s] || "")
+                            const bgColor = val && raciColors[val] ? raciColors[val] : "transparent"
+                            return (
+                              <td key={s} className="px-4 py-2 text-center border-r border-border">
+                                {editingIndex === row._index ? (
+                                  <input type="text" value={val} onChange={(e) => setEditDraft({...editDraft!, [s]: e.target.value.toUpperCase()})} className="w-full px-2 py-1 rounded border border-border text-[10px] font-bold text-center focus:outline-none focus:ring-1 uppercase" maxLength={3} />
+                                ) : (
+                                  <span className="inline-block px-2 py-1 rounded text-white font-bold"
+                                    style={{ background: bgColor || "var(--border)" }}>
+                                    {val || "—"}
+                                  </span>
+                                )}
+                              </td>
+                            )
+                          })}
+                          <td className="px-4 py-2 text-center flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => startEdit(row._index)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary transition-colors" title="Edit">
+                              <Pencil size={11} className="text-muted-foreground" strokeWidth={2} />
+                            </button>
+                            {editingIndex === row._index ? (
+                              <>
+                                <button onClick={saveEdit} className="text-[10px] font-bold px-2 py-1 rounded text-white transition-all" style={{ background: RACI_COLOR }}>Save</button>
+                                <button onClick={() => setEditingIndex(null)} className="text-[10px] font-bold px-2 py-1 rounded border border-border text-muted-foreground transition-all hover:bg-secondary">Cancel</button>
+                              </>
+                            ) : (
+                              <button onClick={() => deleteRow(row._index)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-100 transition-colors" title="Delete">
                                 <X size={11} className="text-red-500" strokeWidth={2.5} />
                               </button>
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

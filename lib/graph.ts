@@ -1203,12 +1203,18 @@ export async function fetchSprintPlanTracker(
 
 /**
  * Send SOW text to webhook for RACI generation.
- * Returns structured RACI JSON with Responsible, Accountable, Consulted, Informed columns.
+ * Returns structured RACI matrix with tasks, responsibilities, and stakeholder assignments.
  */
 export async function generateRACIFromSOW(
   sowText: string
 ): Promise<{ 
-  rows: Array<{ Activity: string; Responsible: string; Accountable: string; Consulted: string; Informed: string }> 
+  output: {
+    raci_matrix: Array<{
+      task: string
+      responsibility: string
+      [stakeholder: string]: string
+    }>
+  }
 }> {
   const res = await fetch(
     "https://indegene-sbx.app.n8n.cloud/webhook-test/644ad6bc-3ac6-4d68-8d94-213f269407e8",
