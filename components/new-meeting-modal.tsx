@@ -41,7 +41,10 @@ export function NewMeetingModal({
   const [meetingDetails, setMeetingDetails] = useState({
     title: "",
     date: new Date().toISOString().split("T")[0],
+    momStyle: "INTERNAL" as "INTERNAL" | "EXECUTIVE" | "CLIENT" | "VENDOR" | "DETAILED",
   })
+
+  const MOM_STYLES = ["INTERNAL", "EXECUTIVE", "CLIENT", "VENDOR", "DETAILED"] as const
 
   function generateCode(): string {
     return Math.floor(10000000 + Math.random() * 90000000).toString()
@@ -136,6 +139,7 @@ export function NewMeetingModal({
         code,
         project_id: projectFolderId,
         project_team: projectTeam,
+        mom_style: meetingDetails.momStyle,
         transcript,
       })
 
@@ -301,6 +305,21 @@ export function NewMeetingModal({
                 onChange={(e) => setMeetingDetails({ ...meetingDetails, date: e.target.value })}
                 className="px-4 py-2 rounded-lg border border-border bg-background text-foreground font-sans text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-foreground font-sans">MOM Style</label>
+              <select
+                value={meetingDetails.momStyle}
+                onChange={(e) => setMeetingDetails({ ...meetingDetails, momStyle: e.target.value as typeof meetingDetails.momStyle })}
+                className="px-4 py-2 rounded-lg border border-border bg-background text-foreground font-sans text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {MOM_STYLES.map((style) => (
+                  <option key={style} value={style}>
+                    {style}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex gap-3 ml-auto">
