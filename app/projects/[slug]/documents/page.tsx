@@ -581,18 +581,29 @@ function RACIModal({ onClose }: { onClose: () => void }) {
     setError(null)
     try {
       const raw = await generateRACIFromSOW(sowText)
-      // Normalise: accept { output: { raci_matrix: [] } } OR { rows: [] } OR []
+      // Normalise response shapes:
+      // [{ output: { raci_matrix: [] } }]  ← actual webhook shape
+      // { output: { raci_matrix: [] } }
+      // { rows: [] }
+      // [] direct array
       let matrix: RACIRow[] = []
       if (Array.isArray(raw)) {
-        matrix = raw as RACIRow[]
+        const first = (raw as any[])[0]
+        if (first?.output?.raci_matrix) {
+          matrix = first.output.raci_matrix as RACIRow[]
+        } else {
+          matrix = raw as RACIRow[]
+        }
       } else if (Array.isArray((raw as any)?.output?.raci_matrix)) {
         matrix = (raw as any).output.raci_matrix as RACIRow[]
       } else if (Array.isArray((raw as any)?.rows)) {
         matrix = (raw as any).rows as RACIRow[]
       }
       if (matrix.length === 0) throw new Error("No RACI data returned. Check your SOW input.")
-      // Derive stakeholder columns = all keys except task & responsibility
-      const cols = Object.keys(matrix[0]).filter(k => k !== "task" && k !== "responsibility")
+      // Collect stakeholder columns across ALL rows (some rows omit certain keys)
+      const colSet = new Set<string>()
+      matrix.forEach(r => Object.keys(r).forEach(k => { if (k !== "task" && k !== "responsibility") colSet.add(k) }))
+      const cols = Array.from(colSet)
       setStakeholders(cols)
       setRACIRows(matrix)
       setStep("view")
@@ -742,13 +753,21 @@ function RACIModal({ onClose }: { onClose: () => void }) {
                             </td>
                             {stakeholders.map(s => {
                               const val = isEditing ? (editDraft?.[s] ?? "") : (row[s] ?? "")
-                              const color = RACI_BADGE_COLORS[val.toUpperCase()] ?? null
+                              // values can be comma-separated e.g. "R,A" or "C,I"
+                              const letters = val ? val.split(",").map(v => v.trim().toUpperCase()).filter(Boolean) : []
                               return (
                                 <td key={s} className="px-4 py-2 text-center border-r border-border">
                                   {isEditing
-                                    ? <input type="text" maxLength={1} value={val} onChange={e => setEditDraft({ ...editDraft!, [s]: e.target.value.toUpperCase() })} className="w-10 px-2 py-1 rounded border border-border text-[10px] font-bold text-center uppercase focus:outline-none focus:ring-1 mx-auto block" />
-                                    : val
-                                      ? <span className="inline-block w-6 h-6 rounded text-center font-bold text-white text-[10px] leading-6" style={{ background: color ?? "var(--muted-foreground)" }}>{val.toUpperCase()}</span>
+                                    ? <input type="text" value={val} onChange={e => setEditDraft({ ...editDraft!, [s]: e.target.value.toUpperCase() })} placeholder="R,A" className="w-14 px-2 py-1 rounded border border-border text-[10px] font-bold text-center uppercase focus:outline-none focus:ring-1 mx-auto block" />
+                                    : letters.length > 0
+                                      ? <div className="flex items-center justify-center gap-0.5 flex-wrap">
+                                          {letters.map((letter, li) => (
+                                            <span key={li} className="inline-block w-5 h-5 rounded text-center font-bold text-white text-[9px] leading-5"
+                                              style={{ background: RACI_BADGE_COLORS[letter] ?? "var(--muted-foreground)" }}>
+                                              {letter}
+                                            </span>
+                                          ))}
+                                        </div>
                                       : <span className="text-muted-foreground">—</span>
                                   }
                                 </td>
