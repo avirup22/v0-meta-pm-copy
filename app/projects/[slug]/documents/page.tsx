@@ -548,7 +548,7 @@ export default function DocumentsPage({ params }: PageProps) {
         {showRACIModal && <RACIModal onClose={() => setShowRACIModal(false)} />}
       </div>
     )
-  }
+}
 
 // ─── RACI Modal Component ──────────────────────────────────────────────────────
 
