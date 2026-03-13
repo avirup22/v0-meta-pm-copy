@@ -543,6 +543,13 @@ export default function DocumentsPage({ params }: PageProps) {
             </div>
           </div>
         )}
+
+        {/* RACI Modal */}
+        {showRACIModal && <RACIModal onClose={() => setShowRACIModal(false)} />}
+      </div>
+    )
+  }
+
 // ─── RACI Modal Component ──────────────────────────────────────────────────────
 
 interface RACIMatrixRow {
