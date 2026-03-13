@@ -684,7 +684,7 @@ function RACIModal({ onClose }: { onClose: () => void }) {
           ) : (
             <>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-foreground font-sans">RACI Matrix ({raciRows.length} activities)</h3>
+                <h3 className="text-sm font-bold text-foreground font-sans">RACI Matrix ({raciRows?.length || 0} activities)</h3>
                 <button onClick={addRow}
                   className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-90"
                   style={{ background: RACI_COLOR }}>
