@@ -319,25 +319,7 @@ const SLIDES: Slide[] = [
   { id: "scope", label: "Scope", icon: BarChart3 },
   { id: "team", label: "Team", icon: Users },
   { id: "timeline", label: "Timeline", icon: CalendarRange },
-  { id: "risks", label: "Risks", icon: AlertTriangle },
-]
-                  style={{ background: `linear-gradient(135deg, ${KICKOFF_COLOR} 0%, oklch(0.48 0.22 20) 100%)` }}>
-                  <div className="px-12 py-16 flex flex-col gap-6 min-h-[340px] justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded bg-white/20 flex items-center justify-center">
-                        <Presentation size={12} color="white" strokeWidth={2.5} />
-                      </div>
-                      <span className="text-white/70 text-[10px] font-semibold uppercase tracking-widest font-sans">Project Kickoff</span>
-                    </div>
-                    <div>
-                      <EditableText
-                        value={data.projectName}
-                        onChange={v => setData({ ...data, projectName: v })}
-                        className="text-3xl font-black text-white leading-tight font-sans text-balance"
-                        placeholder="Project Name"
-                      />
-                      <div className="flex items-center gap-4 mt-4">
-                        <EditableText value={data.client} onChange={v => setData({ ...data, client: v })}
+] value={data.client} onChange={v => setData({ ...data, client: v })}
                           className="text-white/80 text-sm font-semibold font-sans" placeholder="Client" />
                         <span className="text-white/40">·</span>
                         <EditableText value={data.projectManager} onChange={v => setData({ ...data, projectManager: v })}
