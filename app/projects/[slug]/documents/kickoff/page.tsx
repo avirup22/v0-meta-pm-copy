@@ -208,7 +208,7 @@ export default function KickoffPage({ params }: PageProps) {
             <button onClick={handleDownload} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-secondary transition-all"
               style={{ color: "var(--muted-foreground)" }}>
               <Download size={11} strokeWidth={2} />
-              Download PPTX
+              Export as Markdown
             </button>
           )}
           <button
@@ -217,7 +217,7 @@ export default function KickoffPage({ params }: PageProps) {
             className="flex items-center gap-1.5 text-[11px] font-bold px-4 py-1.5 rounded-lg text-white transition-all hover:opacity-90 disabled:opacity-60"
             style={{ background: KICKOFF_COLOR }}>
             {generating ? <Loader2 size={11} className="animate-spin" /> : generated ? <CheckCircle2 size={11} strokeWidth={2.5} /> : <Sparkles size={11} strokeWidth={2.5} />}
-            {generating ? "Generating..." : generated ? "Regenerate" : "Generate PPTX"}
+            {generating ? "Generating..." : generated ? "Regenerate" : "Export to Markdown"}
           </button>
         </div>
       </div>
