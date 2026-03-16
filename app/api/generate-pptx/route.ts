@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import JSZip from "jszip"
 
 interface KickoffData {
   projectName: string
@@ -16,176 +17,261 @@ interface KickoffData {
   nextSteps: string[]
 }
 
+function escapeXml(str: string): string {
+  return str.replace(/[<>&'"]/g, c => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    "'": "&apos;",
+    '"': "&quot;",
+  }[c] || c))
+}
+
+function createTextSlide(title: string, content: string[]): string {
+  const textElements = content
+    .map(
+      (text, i) => `
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="${10 + i}" name="Text ${i + 1}"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="${1371600 + i * 457200}"/>
+            <a:ext cx="8229600" cy="400000"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:rPr lang="en-US" sz="1100"/>
+              <a:t>${escapeXml(text)}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+    `
+    )
+    .join("")
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld>
+    <p:bg>
+      <p:bgPr>
+        <a:solidFill>
+          <a:srgbClr val="FFFFFF"/>
+        </a:solidFill>
+        <a:effectLst/>
+      </p:bgPr>
+    </p:bg>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="9144000" cy="6858000"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="9144000" cy="6858000"/>
+        </a:xfrm>
+        <a:prstGeom prst="rect">
+          <a:avLst/>
+        </a:prstGeom>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Title"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="0" y="0"/>
+            <a:ext cx="9144000" cy="914400"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:rPr lang="en-US" sz="3200" bold="1"/>
+              <a:t>${escapeXml(title)}</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      ${textElements}
+    </p:spTree>
+  </p:cSld>
+  <p:clrMapOvr>
+    <a:masterClrMapping/>
+  </p:clrMapOvr>
+</p:sld>`
+}
+
 export async function POST(req: NextRequest) {
   try {
     const data: KickoffData = await req.json()
 
-    // Dynamically import pptxgen-js server-side only
-    const PptxGenJS = await import("pptxgen-js").then(m => m.default)
-    const prs = new PptxGenJS()
-    
-    const KICKOFF_COLOR = "3D8F5C"
-    prs.defineLayout({ name: "LAYOUT1", width: 10, height: 5.625 })
+    const zip = new JSZip()
 
-    // Slide 1: Title
-    const slide1 = prs.addSlide("LAYOUT1")
-    slide1.background = { fill: KICKOFF_COLOR }
-    slide1.addText(data.projectName, {
-      x: 0.5, y: 1.5, w: 9, h: 1.2,
-      fontSize: 44, bold: true, color: "FFFFFF", align: "left", fontFace: "Arial"
-    })
-    slide1.addText(`${data.client} • ${data.projectManager}`, {
-      x: 0.5, y: 2.8, w: 9, h: 0.4,
-      fontSize: 14, color: "FFFFFFCC", align: "left", fontFace: "Arial"
-    })
-    slide1.addText(`${data.startDate} – ${data.endDate}`, {
-      x: 0.5, y: 4.8, w: 9, h: 0.3,
-      fontSize: 11, color: "FFFFFF99", align: "left", fontFace: "Arial"
-    })
+    // Add minimum PPTX structure
+    zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide3.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide4.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide5.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide6.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide7.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide8.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
+  <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
+  <Override PartName="/ppt/presentation.xml.rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+</Types>`)
 
-    // Slide 2: Overview
-    const slide2 = prs.addSlide("LAYOUT1")
-    slide2.background = { fill: "FFFFFF" }
-    slide2.addText("Project Overview", {
-      x: 0.5, y: 0.4, w: 9, h: 0.5,
-      fontSize: 32, bold: true, color: "000000", fontFace: "Arial"
-    })
-    slide2.addText(data.overview, {
-      x: 0.5, y: 1.1, w: 9, h: 2.5,
-      fontSize: 12, color: "333333", align: "left", fontFace: "Arial"
-    })
+    zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`)
 
-    // Slide 3: Objectives
-    const slide3 = prs.addSlide("LAYOUT1")
-    slide3.background = { fill: "FFFFFF" }
-    slide3.addText("Objectives", {
-      x: 0.5, y: 0.4, w: 9, h: 0.5,
-      fontSize: 32, bold: true, color: "000000", fontFace: "Arial"
-    })
-    let objY = 1.1
-    data.objectives.forEach(obj => {
-      slide3.addText(`• ${obj}`, {
-        x: 0.8, y: objY, w: 8.7, h: 0.5,
-        fontSize: 11, color: "333333", align: "left", fontFace: "Arial"
-      })
-      objY += 0.55
-    })
+    zip.file("ppt/_rels/presentation.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>
+  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide3.xml"/>
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide4.xml"/>
+  <Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide5.xml"/>
+  <Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide6.xml"/>
+  <Relationship Id="rId8" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide7.xml"/>
+  <Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide8.xml"/>
+</Relationships>`)
 
-    // Slide 4: Scope
-    const slide4 = prs.addSlide("LAYOUT1")
-    slide4.background = { fill: "FFFFFF" }
-    slide4.addText("Scope", {
-      x: 0.5, y: 0.4, w: 9, h: 0.5,
-      fontSize: 32, bold: true, color: "000000", fontFace: "Arial"
-    })
-    slide4.addText("In Scope", {
-      x: 0.5, y: 1.1, w: 4.5, h: 0.35,
-      fontSize: 13, bold: true, color: "2D7A4A", fontFace: "Arial"
-    })
-    let inScopeY = 1.5
-    data.scope.forEach(item => {
-      slide4.addText(`• ${item}`, {
-        x: 0.7, y: inScopeY, w: 4, h: 0.4,
-        fontSize: 10, color: "333333", fontFace: "Arial"
-      })
-      inScopeY += 0.45
-    })
-    slide4.addText("Out of Scope", {
-      x: 5.2, y: 1.1, w: 4.5, h: 0.35,
-      fontSize: 13, bold: true, color: "B84B4B", fontFace: "Arial"
-    })
-    let outScopeY = 1.5
-    data.outOfScope.forEach(item => {
-      slide4.addText(`• ${item}`, {
-        x: 5.4, y: outScopeY, w: 4, h: 0.4,
-        fontSize: 10, color: "333333", fontFace: "Arial"
-      })
-      outScopeY += 0.45
-    })
+    zip.file("ppt/presentation.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldMasterIdLst>
+    <p:sldMasterId id="256" r:id="rId1"/>
+  </p:sldMasterIdLst>
+  <p:sldIdLst>
+    <p:sldId id="256" r:id="rId2"/>
+    <p:sldId id="257" r:id="rId3"/>
+    <p:sldId id="258" r:id="rId4"/>
+    <p:sldId id="259" r:id="rId5"/>
+    <p:sldId id="260" r:id="rId6"/>
+    <p:sldId id="261" r:id="rId7"/>
+    <p:sldId id="262" r:id="rId8"/>
+    <p:sldId id="263" r:id="rId9"/>
+  </p:sldIdLst>
+  <p:notesMasterIdLst/>
+  <p:handoutMasterIdLst/>
+  <p:clrMapOvr><a:masterClrMapping xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/></p:clrMapOvr>
+  <p:photoAlbum/>
+</p:presentation>`)
 
-    // Slide 5: Team
-    const slide5 = prs.addSlide("LAYOUT1")
-    slide5.background = { fill: "FFFFFF" }
-    slide5.addText("Project Team", {
-      x: 0.5, y: 0.4, w: 9, h: 0.5,
-      fontSize: 32, bold: true, color: "000000", fontFace: "Arial"
-    })
-    let teamY = 1.1
-    data.team.forEach(member => {
-      slide5.addText(`${member.name} (${member.role})`, {
-        x: 0.7, y: teamY, w: 8.6, h: 0.3,
-        fontSize: 11, bold: true, color: "000000", fontFace: "Arial"
-      })
-      slide5.addText(member.responsibilities, {
-        x: 0.9, y: teamY + 0.35, w: 8.4, h: 0.3,
-        fontSize: 9, color: "666666", fontFace: "Arial"
-      })
-      teamY += 0.8
-    })
+    // Create slides
+    zip.file(
+      "ppt/slides/slide1.xml",
+      createTextSlide(data.projectName, [
+        `${data.client} • ${data.projectManager}`,
+        `${data.startDate} – ${data.endDate}`,
+      ])
+    )
+    zip.file("ppt/slides/slide2.xml", createTextSlide("Project Overview", [data.overview]))
+    zip.file("ppt/slides/slide3.xml", createTextSlide("Objectives", data.objectives))
+    zip.file(
+      "ppt/slides/slide4.xml",
+      createTextSlide("Scope", [
+        "IN SCOPE:",
+        ...data.scope,
+        "",
+        "OUT OF SCOPE:",
+        ...data.outOfScope,
+      ])
+    )
+    zip.file(
+      "ppt/slides/slide5.xml",
+      createTextSlide(
+        "Project Team",
+        data.team.flatMap(m => [`${m.name} (${m.role})`, m.responsibilities])
+      )
+    )
+    zip.file(
+      "ppt/slides/slide6.xml",
+      createTextSlide(
+        "Timeline & Milestones",
+        data.milestones.map(m => `${m.name} — ${m.date}`)
+      )
+    )
+    zip.file(
+      "ppt/slides/slide7.xml",
+      createTextSlide(
+        "Key Risks",
+        data.risks.flatMap(r => [
+          `${r.description} [${r.impact}]`,
+          `Mitigation: ${r.mitigation}`,
+        ])
+      )
+    )
+    zip.file("ppt/slides/slide8.xml", createTextSlide("Next Steps", data.nextSteps))
 
-    // Slide 6: Timeline
-    const slide6 = prs.addSlide("LAYOUT1")
-    slide6.background = { fill: "FFFFFF" }
-    slide6.addText("Timeline & Milestones", {
-      x: 0.5, y: 0.4, w: 9, h: 0.5,
-      fontSize: 32, bold: true, color: "000000", fontFace: "Arial"
-    })
-    let milestoneY = 1.1
-    data.milestones.forEach(m => {
-      slide6.addText(`${m.name} — ${m.date}`, {
-        x: 0.7, y: milestoneY, w: 8.6, h: 0.3,
-        fontSize: 11, bold: true, color: "000000", fontFace: "Arial"
-      })
-      milestoneY += 0.55
-    })
+    // Minimal slideMaster & slideLayout
+    zip.file(
+      "ppt/slideMasters/slideMaster1.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></p:bgPr></p:bg></p:cSld>
+</p:sldMaster>`
+    )
+    zip.file(
+      "ppt/slideLayouts/slideLayout1.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr></p:spTree></p:cSld>
+</p:sldLayout>`
+    )
 
-    // Slide 7: Risks
-    const slide7 = prs.addSlide("LAYOUT1")
-    slide7.background = { fill: "FFFFFF" }
-    slide7.addText("Key Risks", {
-      x: 0.5, y: 0.4, w: 9, h: 0.5,
-      fontSize: 32, bold: true, color: "000000", fontFace: "Arial"
-    })
-    let riskY = 1.1
-    data.risks.forEach(risk => {
-      slide7.addText(`${risk.description} [${risk.impact}]`, {
-        x: 0.7, y: riskY, w: 8.6, h: 0.3,
-        fontSize: 10, bold: true, color: "000000", fontFace: "Arial"
-      })
-      slide7.addText(`Mitigation: ${risk.mitigation}`, {
-        x: 0.9, y: riskY + 0.35, w: 8.4, h: 0.3,
-        fontSize: 9, color: "666666", fontFace: "Arial", italic: true
-      })
-      riskY += 0.8
-    })
+    const blob = await zip.generateAsync({ type: "arraybuffer" })
 
-    // Slide 8: Next Steps
-    const slide8 = prs.addSlide("LAYOUT1")
-    slide8.background = { fill: "FFFFFF" }
-    slide8.addText("Next Steps", {
-      x: 0.5, y: 0.4, w: 9, h: 0.5,
-      fontSize: 32, bold: true, color: "000000", fontFace: "Arial"
-    })
-    let stepY = 1.1
-    data.nextSteps.forEach(step => {
-      slide8.addText(`• ${step}`, {
-        x: 0.8, y: stepY, w: 8.7, h: 0.45,
-        fontSize: 11, color: "333333", fontFace: "Arial"
-      })
-      stepY += 0.5
-    })
-
-    // Generate buffer
-    const buf = await prs.write({ outputType: "arraybuffer" })
-    return new NextResponse(buf, {
+    return new NextResponse(blob, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "Content-Disposition": `attachment; filename="${data.projectName}-Kickoff.pptx"`,
+        "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     })
   } catch (err) {
     console.error("PPTX generation error:", err)
-    return NextResponse.json({ error: "Failed to generate PPTX" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to generate PPTX", details: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    )
   }
 }
