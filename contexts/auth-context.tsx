@@ -106,9 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(SESSION_DEMO_KEY)
   }, [])
 
-  // Don't render children until we've restored session state
-  if (!hydrated) return null
-
   return (
     <AuthContext.Provider
       value={{
