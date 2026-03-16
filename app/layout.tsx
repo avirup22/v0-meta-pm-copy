@@ -31,8 +31,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${_jakarta.variable} ${_jetbrainsMono.variable} font-sans antialiased`}>
-        <MabelModeProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <MabelModeProvider>
             <div className="flex h-screen overflow-hidden">
               <AppSidebar />
               <main className="flex-1 overflow-y-auto bg-background relative">
@@ -42,8 +42,8 @@ export default function RootLayout({
                 {children}
               </main>
             </div>
-          </AuthProvider>
-        </MabelModeProvider>
+          </MabelModeProvider>
+        </AuthProvider>
       </body>
     </html>
   )
